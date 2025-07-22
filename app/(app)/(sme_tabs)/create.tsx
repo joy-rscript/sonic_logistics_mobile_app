@@ -6,7 +6,7 @@ import { SPACING, FONT, FONT_SIZE, BORDER_RADIUS } from '@/constants/Theme';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 
-interface ShipmentForm {
+interface DeliveryForm {
   pickupAddress: string;
   deliveryAddress: string;
   packageDescription: string;
@@ -16,8 +16,8 @@ interface ShipmentForm {
   specialInstructions: string;
 }
 
-export default function CreateShipmentScreen() {
-  const [formData, setFormData] = useState<ShipmentForm>({
+export default function CreateDeliveryScreen() {
+  const [formData, setFormData] = useState<DeliveryForm>({
     pickupAddress: '',
     deliveryAddress: '',
     packageDescription: '',
@@ -27,16 +27,16 @@ export default function CreateShipmentScreen() {
     specialInstructions: '',
   });
 
-  const updateFormData = (key: keyof ShipmentForm, value: string) => {
+  const updateFormData = (key: keyof DeliveryForm, value: string) => {
     setFormData(prev => ({
       ...prev,
       [key]: value
     }));
   };
 
-  const handleCreateShipment = () => {
-    // Handle shipment creation logic
-    console.log('Creating shipment:', formData);
+  const handleCreateDelivery = () => {
+    // Handle Delivery creation logic
+    console.log('Creating Delivery:', formData);
   };
 
   const isFormValid = formData.pickupAddress && formData.deliveryAddress && formData.packageDescription;
@@ -44,7 +44,7 @@ export default function CreateShipmentScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Create Shipment</Text>
+        <Text style={styles.headerTitle}>Create Delivery</Text>
         <Text style={styles.headerSubtitle}>Fill in the details below</Text>
       </View>
 
@@ -149,8 +149,8 @@ export default function CreateShipmentScreen() {
         </Card>
 
         <Button
-          title="Create Shipment"
-          onPress={handleCreateShipment}
+          title="Create Delivery"
+          onPress={handleCreateDelivery}
           disabled={!isFormValid}
           style={styles.createButton}
         />

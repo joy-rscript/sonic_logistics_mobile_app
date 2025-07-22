@@ -1,4 +1,5 @@
 import { StyleSheet, Text, View, Image, TouchableOpacity } from 'react-native';
+import LottieView from 'lottie-react-native';
 import { Link, router } from 'expo-router';
 import Colors from '@/constants/Colors';
 import { SPACING, FONT, FONT_SIZE, BORDER_RADIUS } from '@/constants/Theme';
@@ -13,17 +14,16 @@ export default function WelcomeScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.logoContainer}>
-        <Image 
-          source={{ uri: 'https://images.pexels.com/photos/7363185/pexels-photo-7363185.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2' }} 
-          style={styles.backgroundImage}
-        />
+        
         <View style={styles.overlay} />
         <View style={styles.content}>
-          <Image
-            source={{ uri: 'https://i.ibb.co/CPcFzfP/sonic-logo.png' }}
-            style={styles.logo}
-            resizeMode="contain"
-          />
+          <LottieView
+            source={{ uri: 'https://lottie.host/66ff6de2-394e-4010-8064-1d884167dbf6/do1Etdp721.json' }}
+            autoPlay
+            loop
+            style={styles.backgroundImage}
+            />
+
           <Text style={styles.title}>Sonic Logistics</Text>
           <Text style={styles.subtitle}>
             Providing seamless logistics solutions across Africa, connecting businesses and consumers with ease.
@@ -65,11 +65,11 @@ const styles = StyleSheet.create({
   },
   overlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(250, 246, 246, 0.5)',
   },
   content: {
     flex: 1,
-    justifyContent: 'center',
+    justifyContent: 'flex-end',
     alignItems: 'center',
     paddingHorizontal: SPACING.xl,
   },
@@ -81,16 +81,16 @@ const styles = StyleSheet.create({
   title: {
     fontFamily: FONT.poppinsBold,
     fontSize: FONT_SIZE.xxxl,
-    color: 'white',
+    color: Colors.light.text,
     marginBottom: SPACING.sm,
     textAlign: 'center',
   },
   subtitle: {
-    fontFamily: FONT.regular,
-    fontSize: FONT_SIZE.md,
-    color: 'white',
+    fontSize: FONT_SIZE.xs,
+    color: Colors.light.text,
     textAlign: 'center',
-    lineHeight: 24,
+    lineHeight: 20,
+    fontStyle: 'italic',
   },
   bottomContainer: {
     flex: 1,
@@ -105,7 +105,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: SPACING.md,
   },
   loginText: {
     fontFamily: FONT.regular,

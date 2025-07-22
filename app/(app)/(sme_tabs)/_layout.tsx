@@ -28,9 +28,9 @@ export default function SMETabLayout() {
         }}
       />
       <Tabs.Screen
-        name="shipments"
+        name="deliveries"
         options={{
-          title: 'Shipments',
+          title: 'Deliveries',
           tabBarIcon: ({ color, size }) => <Package size={size} color={color} />,
         }}
       />
@@ -53,6 +53,12 @@ export default function SMETabLayout() {
         options={{
           title: 'Profile',
           tabBarIcon: ({ color, size }) => <User size={size} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="tracking"
+        options={{
+          href: null, // Hide from tab bar
         }}
       />
     </Tabs>

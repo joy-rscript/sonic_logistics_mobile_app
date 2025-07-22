@@ -31,21 +31,41 @@ interface DeliveryRequest {
   pickupCord: Coordinates;
   dropoffCord: Coordinates;
   tracker?: DeliveryTracker;
-  status: 'pending' | 'ongoing' | 'completed';
+  status: 'pending' | 'accepted' | 'in_progress' | 'completed';
   acceptedAt?: Date;
+  driverId?: string;
+  driverName?: string;
+  driverLocation?: Coordinates;
+  // SME form fields
+  destination?: string;
+  packageName?: string;
+  packageDescription?: string;
+  insurance?: 'yes' | 'no' | '';
+  selectedQualities?: string[];
 }
 
 interface DeliveryContextType {
   allDeliveries: DeliveryRequest[];
   pendingOngoingDeliveries: DeliveryRequest[];
   currentDelivery: DeliveryRequest | null;
+  smeDeliveries: DeliveryRequest[];
   acceptDelivery: (deliveryId: string) => void;
   setCurrentDelivery: (delivery: DeliveryRequest | null) => void;
   updateDeliveryTracker: (deliveryId: string, tracker: Partial<DeliveryTracker>) => void;
   completeDelivery: (deliveryId: string) => void;
+  createNewDelivery: (delivery: Partial<DeliveryRequest>) => void;
+  updateDriverLocation: (deliveryId: string, location: Coordinates) => void;
+  getDeliveryById: (id: string) => DeliveryRequest | null;
 }
 
 const DeliveryContext = createContext<DeliveryContextType | undefined>(undefined);
+
+// Mock driver data
+const mockDrivers = [
+  { id: 'driver1', name: 'Martin Lawrence', rating: 4.8 },
+  { id: 'driver2', name: 'John Kamau', rating: 4.6 },
+  { id: 'driver3', name: 'Sarah Wanjiku', rating: 4.9 },
+];
 
 // All available delivery requests (open requests from SMEs)
 const allAvailableDeliveries: DeliveryRequest[] = [
@@ -101,84 +121,9 @@ const allAvailableDeliveries: DeliveryRequest[] = [
     },
     status: 'pending',
   },
-  {
-    id: 'd3',
-    location: 'Mombasa',
-    price: 35,
-    clientName: 'John Kamau',
-    clientType: 'Ocean Freight Ltd',
-    premium: true,
-    badges: ['Premium', 'Heavy Cargo'],
-    pickup: '45 Beach Road, Tudor',
-    dropoff: 'Mombasa Port, Berth 16',
-    estimate: '8km | 3hrs',
-    pickupCord: {
-      latitude: -4.0619,
-      longitude: 39.6682,
-      latitudeDelta: 0.0422,
-      longitudeDelta: 0.0421,
-    },
-    dropoffCord: {
-      latitude: -4.0435,
-      longitude: 39.6682,
-      latitudeDelta: 0.0440,
-      longitudeDelta: 0.0421,
-    },
-    status: 'pending',
-  },
-  {
-    id: 'd4',
-    location: 'Nakuru',
-    price: 45,
-    clientName: 'Sarah Wanjiku',
-    clientType: 'Lake Farms',
-    premium: false,
-    badges: ['Standard', 'Perishables'],
-    pickup: '23 Lake View Drive',
-    dropoff: 'Central Market, Nakuru',
-    estimate: '4km | 1.5hrs',
-    pickupCord: {
-      latitude: -0.2827,
-      longitude: 36.0800,
-      latitudeDelta: 0.0422,
-      longitudeDelta: 0.0421,
-    },
-    dropoffCord: {
-      latitude: -0.3031,
-      longitude: 36.0800,
-      latitudeDelta: 0.0440,
-      longitudeDelta: 0.0421,
-    },
-    status: 'pending',
-  },
-  {
-    id: 'd5',
-    location: 'Eldoret',
-    price: 55,
-    clientName: 'Mike Kiprop',
-    clientType: 'Highland Distributors',
-    premium: true,
-    badges: ['Premium', 'Express', 'Fragile'],
-    pickup: '78 Pioneer Road',
-    dropoff: 'Eldoret International Airport',
-    estimate: '6km | 2.5hrs',
-    pickupCord: {
-      latitude: 0.5200,
-      longitude: 35.2697,
-      latitudeDelta: 0.0422,
-      longitudeDelta: 0.0421,
-    },
-    dropoffCord: {
-      latitude: 0.5143,
-      longitude: 35.2395,
-      latitudeDelta: 0.0440,
-      longitudeDelta: 0.0421,
-    },
-    status: 'pending',
-  }
 ];
 
-// Mock data for deliveries already accepted by the courier (would come from API)
+// Mock data for deliveries already accepted by the courier
 const mockAcceptedDeliveries: DeliveryRequest[] = [
   {
     id: 'ongoing1',
@@ -204,8 +149,16 @@ const mockAcceptedDeliveries: DeliveryRequest[] = [
       latitudeDelta: 0.0440,
       longitudeDelta: 0.0421,
     },
-    status: 'ongoing',
-    acceptedAt: new Date(Date.now() - 2 * 60 * 60 * 1000), // 2 hours ago
+    status: 'accepted',
+    acceptedAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
+    driverId: 'driver1',
+    driverName: 'Martin Lawrence',
+    driverLocation: {
+      latitude: -1.2650,
+      longitude: 36.8080,
+      latitudeDelta: 0.0422,
+      longitudeDelta: 0.0421,
+    },
     tracker: {
       pickup: 'completed',
       pickupCode: '12345',
@@ -215,20 +168,25 @@ const mockAcceptedDeliveries: DeliveryRequest[] = [
       dropoffImage: null,
     }
   },
+];
+
+// Mock SME deliveries (deliveries created by SMEs)
+const mockSMEDeliveries: DeliveryRequest[] = [
   {
-    id: 'ongoing2',
-    location: 'Karen',
+    id: 'sme1',
+    location: 'Nairobi CBD',
     price: 45,
-    clientName: 'Green Valley Farms',
-    clientType: 'Agriculture',
-    premium: false,
-    badges: ['Standard', 'Perishables'],
-    pickup: 'Karen Shopping Centre',
-    dropoff: 'Galleria Mall, Karen',
-    estimate: '3km | 30min',
+    clientName: 'TechCorp Solutions',
+    clientType: 'Technology Company',
+    premium: true,
+    badges: ['Premium', 'Fragile'],
+    pickup: 'TechCorp Building, Nairobi CBD',
+    dropoff: 'Karen Shopping Centre',
+    estimate: '12km | 45min',
+    instructions: 'Handle with care - electronics inside.',
     pickupCord: {
-      latitude: -1.3197,
-      longitude: 36.7025,
+      latitude: -1.2921,
+      longitude: 36.8219,
       latitudeDelta: 0.0422,
       longitudeDelta: 0.0421,
     },
@@ -238,24 +196,61 @@ const mockAcceptedDeliveries: DeliveryRequest[] = [
       latitudeDelta: 0.0440,
       longitudeDelta: 0.0421,
     },
-    status: 'ongoing',
-    acceptedAt: new Date(Date.now() - 1 * 60 * 60 * 1000), // 1 hour ago
-    tracker: {
-      pickup: 'pending',
-      pickupCode: null,
-      pickupImage: null,
-      dropoff: 'pending',
-      dropoffCode: null,
-      dropoffImage: null,
-    }
-  }
+    status: 'accepted',
+    acceptedAt: new Date(Date.now() - 1 * 60 * 60 * 1000),
+    driverId: 'driver2',
+    driverName: 'John Kamau',
+    driverLocation: {
+      latitude: -1.2950,
+      longitude: 36.8100,
+      latitudeDelta: 0.0422,
+      longitudeDelta: 0.0421,
+    },
+    // SME form data
+    destination: 'Karen Shopping Centre',
+    packageName: 'Laptop Computer',
+    packageDescription: 'Dell Laptop for office use',
+    insurance: 'yes',
+    selectedQualities: ['Fragile', 'Urgent'],
+  },
+  {
+    id: 'sme2',
+    location: 'Westlands',
+    price: 35,
+    clientName: 'TechCorp Solutions',
+    clientType: 'Technology Company',
+    premium: false,
+    badges: ['Standard'],
+    pickup: 'TechCorp Building, Nairobi CBD',
+    dropoff: 'Westlands Mall',
+    estimate: '8km | 30min',
+    pickupCord: {
+      latitude: -1.2921,
+      longitude: 36.8219,
+      latitudeDelta: 0.0422,
+      longitudeDelta: 0.0421,
+    },
+    dropoffCord: {
+      latitude: -1.2630,
+      longitude: 36.8063,
+      latitudeDelta: 0.0440,
+      longitudeDelta: 0.0421,
+    },
+    status: 'pending',
+    // SME form data
+    destination: 'Westlands Mall',
+    packageName: 'Office Supplies',
+    packageDescription: 'Stationery and office materials',
+    insurance: 'no',
+    selectedQualities: ['Standard'],
+  },
 ];
 
 export function DeliveryProvider({ children }: { children: ReactNode }) {
   const [allDeliveries, setAllDeliveries] = useState<DeliveryRequest[]>(allAvailableDeliveries);
   const [pendingOngoingDeliveries, setPendingOngoingDeliveries] = useState<DeliveryRequest[]>(mockAcceptedDeliveries);
+  const [smeDeliveries, setSmeDeliveries] = useState<DeliveryRequest[]>(mockSMEDeliveries);
   const [currentDelivery, setCurrentDeliveryState] = useState<DeliveryRequest | null>(
-    // Default to the first ongoing delivery with pending pickup
     mockAcceptedDeliveries.find(d => d.tracker?.pickup === 'completed') || null
   );
 
@@ -263,11 +258,22 @@ export function DeliveryProvider({ children }: { children: ReactNode }) {
     const delivery = allDeliveries.find(d => d.id === deliveryId);
     if (!delivery) return;
 
+    // Assign random driver
+    const randomDriver = mockDrivers[Math.floor(Math.random() * mockDrivers.length)];
+
     // Create ongoing delivery with tracker
     const ongoingDelivery: DeliveryRequest = {
       ...delivery,
-      status: 'ongoing',
+      status: 'accepted',
       acceptedAt: new Date(),
+      driverId: randomDriver.id,
+      driverName: randomDriver.name,
+      driverLocation: {
+        latitude: delivery.pickupCord.latitude + (Math.random() - 0.5) * 0.01,
+        longitude: delivery.pickupCord.longitude + (Math.random() - 0.5) * 0.01,
+        latitudeDelta: 0.0422,
+        longitudeDelta: 0.0421,
+      },
       tracker: {
         pickup: 'pending',
         pickupCode: null,
@@ -282,23 +288,37 @@ export function DeliveryProvider({ children }: { children: ReactNode }) {
     setAllDeliveries(prev => prev.filter(d => d.id !== deliveryId));
     setPendingOngoingDeliveries(prev => [...prev, ongoingDelivery]);
     
+    // Update SME deliveries if this delivery belongs to an SME
+    setSmeDeliveries(prev => 
+      prev.map(d => 
+        d.id === deliveryId 
+          ? { ...d, status: 'accepted', driverId: randomDriver.id, driverName: randomDriver.name, acceptedAt: new Date() }
+          : d
+      )
+    );
+
     // Set as current delivery if none exists
     if (!currentDelivery) {
       setCurrentDeliveryState(ongoingDelivery);
     }
-
-    // TODO: Send API update
-    // acceptDeliveryAPI(deliveryId);
   };
 
   const setCurrentDelivery = (delivery: DeliveryRequest | null) => {
     setCurrentDeliveryState(delivery);
-    // TODO: Store in API/AsyncStorage
-    // storeCurrentDeliveryAPI(delivery?.id || null);
   };
 
   const updateDeliveryTracker = (deliveryId: string, trackerUpdate: Partial<DeliveryTracker>) => {
+    // Update pending ongoing deliveries
     setPendingOngoingDeliveries(prev => 
+      prev.map(delivery => 
+        delivery.id === deliveryId 
+          ? { ...delivery, tracker: { ...delivery.tracker!, ...trackerUpdate } }
+          : delivery
+      )
+    );
+
+    // Update SME deliveries
+    setSmeDeliveries(prev => 
       prev.map(delivery => 
         delivery.id === deliveryId 
           ? { ...delivery, tracker: { ...delivery.tracker!, ...trackerUpdate } }
@@ -312,22 +332,71 @@ export function DeliveryProvider({ children }: { children: ReactNode }) {
         prev ? { ...prev, tracker: { ...prev.tracker!, ...trackerUpdate } } : null
       );
     }
-
-    // TODO: Send API update
-    // updateDeliveryTrackerAPI(deliveryId, trackerUpdate);
   };
 
   const completeDelivery = (deliveryId: string) => {
+    // Update status to completed
+    const updateToCompleted = (delivery: DeliveryRequest) => 
+      delivery.id === deliveryId ? { ...delivery, status: 'completed' as const } : delivery;
+
     setPendingOngoingDeliveries(prev => prev.filter(d => d.id !== deliveryId));
+    setSmeDeliveries(prev => prev.map(updateToCompleted));
     
     // Clear current delivery if it's the completed delivery
     if (currentDelivery?.id === deliveryId) {
       const nextOngoing = pendingOngoingDeliveries.find(d => d.id !== deliveryId);
       setCurrentDeliveryState(nextOngoing || null);
     }
+  };
 
-    // TODO: Send API update and move to completed deliveries
-    // completeDeliveryAPI(deliveryId);
+  const createNewDelivery = (deliveryData: Partial<DeliveryRequest>) => {
+    const newDelivery: DeliveryRequest = {
+      id: `sme-${Date.now()}`,
+      location: deliveryData.destination || 'Unknown',
+      price: Math.floor(Math.random() * 50) + 30, // Random price between 30-80
+      clientName: 'TechCorp Solutions', // This would come from user context
+      clientType: 'Technology Company',
+      premium: deliveryData.selectedQualities?.includes('Premium') || false,
+      badges: deliveryData.selectedQualities || ['Standard'],
+      pickup: 'TechCorp Building, Nairobi CBD', // This would come from user profile
+      dropoff: deliveryData.destination || '',
+      estimate: '5km | 30min', // This would be calculated
+      instructions: deliveryData.instructions,
+      pickupCord: {
+        latitude: -1.2921,
+        longitude: 36.8219,
+        latitudeDelta: 0.0422,
+        longitudeDelta: 0.0421,
+      },
+      dropoffCord: {
+        latitude: -1.2921 + (Math.random() - 0.5) * 0.1,
+        longitude: 36.8219 + (Math.random() - 0.5) * 0.1,
+        latitudeDelta: 0.0440,
+        longitudeDelta: 0.0421,
+      },
+      status: 'pending',
+      ...deliveryData,
+    };
+
+    // Add to both SME deliveries and available deliveries
+    setSmeDeliveries(prev => [...prev, newDelivery]);
+    setAllDeliveries(prev => [...prev, newDelivery]);
+  };
+
+  const updateDriverLocation = (deliveryId: string, location: Coordinates) => {
+    const updateLocation = (delivery: DeliveryRequest) => 
+      delivery.id === deliveryId ? { ...delivery, driverLocation: location } : delivery;
+
+    setPendingOngoingDeliveries(prev => prev.map(updateLocation));
+    setSmeDeliveries(prev => prev.map(updateLocation));
+    
+    if (currentDelivery?.id === deliveryId) {
+      setCurrentDeliveryState(prev => prev ? { ...prev, driverLocation: location } : null);
+    }
+  };
+
+  const getDeliveryById = (id: string): DeliveryRequest | null => {
+    return [...allDeliveries, ...pendingOngoingDeliveries, ...smeDeliveries].find(d => d.id === id) || null;
   };
 
   return (
@@ -335,10 +404,14 @@ export function DeliveryProvider({ children }: { children: ReactNode }) {
       allDeliveries,
       pendingOngoingDeliveries,
       currentDelivery,
+      smeDeliveries,
       acceptDelivery,
       setCurrentDelivery,
       updateDeliveryTracker,
       completeDelivery,
+      createNewDelivery,
+      updateDriverLocation,
+      getDeliveryById,
     }}>
       {children}
     </DeliveryContext.Provider>

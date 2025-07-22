@@ -17,8 +17,6 @@ export default function LoginScreen() {
   });
 
   const handleLogin = () => {
-    // In a real app, we'd validate credentials and determine user role
-    // For demo purposes, we'll simulate different user types
     
     // Mock authentication logic
     if (formData.email.includes('courier')) {
@@ -47,7 +45,7 @@ export default function LoginScreen() {
       <View style={styles.content}>
         <View style={styles.logoContainer}>
           <Image
-            source={{ uri: 'https://i.ibb.co/CPcFzfP/sonic-logo.png' }}
+            source={require('../../assets/illustrations/Tiny_people_carrying_key_to_open_padlock.jpg')} 
             style={styles.logo}
             resizeMode="contain"
           />

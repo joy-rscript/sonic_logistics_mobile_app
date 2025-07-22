@@ -37,6 +37,12 @@ const SNAP_POINTS = {
 };
 
 export default function CourierHomeScreen() {
+  const isSME = true;
+
+  // if (isSME) {
+  //    router.replace('/(app)/(sme_tabs)' as any);
+  //   return null;
+  // }
   const [mapRegion, setMapRegion] = useState({
     latitude: 0,
     longitude: 0,
@@ -59,7 +65,8 @@ export default function CourierHomeScreen() {
     currentDelivery, 
     acceptDelivery,
     updateDeliveryTracker,
-    completeDelivery
+    completeDelivery,
+    createNewDelivery
   } = useDelivery();
 
   const [selectedDelivery, setSelectedDelivery] = useState(
@@ -573,7 +580,7 @@ export default function CourierHomeScreen() {
               style={styles.bottomSheetContent}
               showsVerticalScrollIndicator={false}
               bounces={false}
-              keyboardShouldPersistTaps="handled"
+              keyboardShouldPersistTaps="never"
               contentContainerStyle={[
                 styles.bottomSheetContentContainer,
                 keyboardVisible && { paddingBottom: 200 }

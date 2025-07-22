@@ -1,496 +1,402 @@
-import { useState, useRef, useEffect } from 'react';
-import { StyleSheet,Text, View,SafeAreaView,TextInput,TouchableOpacity,ScrollView,Dimensions,PanResponder,Animated, Platform, Keyboard,KeyboardAvoidingView} from 'react-native';
-import {Chip, Checkbox} from 'react-native-paper';
-import MapView, { Marker } from 'react-native-maps';
-import { MapPin, Package, Shield, Clock, ArrowRight } from 'lucide-react-native';
-import Colors from '@/constants/Colors';
-import { SPACING, FONT, FONT_SIZE, BORDER_RADIUS, SHADOWS } from '@/constants/Theme';
+import React, { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
-import * as Location from 'expo-location';
-import { GooglePlacesAutocomplete } from 'react-native-google-places-autocomplete';
+import { BottomSheet } from '@/components/ui/BottomSheet';
+import { StepIndicator } from '@/components/ui/StepIndicator';
 
-const { height: screenHeight, width: screenWidth } = Dimensions.get('window');
+import {
+  StyleSheet, View, Text, TextInput, TouchableOpacity,
+  Animated, Platform, KeyboardAvoidingView, TouchableWithoutFeedback, Keyboard, ScrollView, Dimensions
+} from 'react-native';
+import MapView from 'react-native-maps';
+import { Package, MapPin, ArrowLeft, ArrowRight } from 'lucide-react-native';
+import * as Haptics from 'expo-haptics';
+import Colors from '@/constants/Colors';
+import { SPACING, FONT, FONT_SIZE, BORDER_RADIUS } from '@/constants/Theme';
+import { Picker } from '@react-native-picker/picker'
+import { Checkbox, Chip } from 'react-native-paper';
+import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
+              
+              
 
-interface DeliveryFormData {
-  destination: string;
-  packageName: string;
+const SNAP_COLLAPSED = 200;
+const SNAP_EXPANDED = Dimensions.get('window').height * 0.7;
+
+interface DeliveryForm {
+  qualities: any;
+  weightType: string;
+  pickupLocation: string;
+  destinationLocation: string;
   packageDescription: string;
-  instructions: string;
-  insurance: 'yes' | 'no' | '';
-  selectedQualities: string[];
+  packageWeight: string;
+  courierCapacity: string;
+  itemValue: string;
+  vehicleType:string,
+  valueRange: number;
+  insurance : boolean;
 }
+export default function HomeScreen() {
+  const [mapRegion, setMapRegion] = useState({
+    latitude: 0, longitude: 0,
+    latitudeDelta: 0.005, longitudeDelta: 0.005,
+  });
+  const [showBottomSheet, setShowBottomSheet] = useState(false);
+  const [currentStep, setCurrentStep] = useState(1);
+  const [showLoading, setShowLoading] = useState(false);
+  const [showPayment, setShowPayment] = useState(false);
+  const [userName] = useState('Maureen');
 
-export default function SMEHomeScreen() {
-  const [destination, setDestination] = useState('');
-  type Coordinates = {
-  latitude: number;
-  longitude: number;
-  latitudeDelta: number,
-  longitudeDelta: number,
+  const [formData, setFormData] = useState<DeliveryForm>({
+    pickupLocation: '', 
+    destinationLocation: '',
+    packageDescription: '', 
+    packageWeight: '',
+    courierCapacity: '', 
+    itemValue: '',
+    valueRange: 0,
+    vehicleType: '',
+    qualities: [],
+    weightType: '',
+    insurance : false
+  });
+
+  const bottomSheetAnim = useRef(new Animated.Value(SNAP_COLLAPSED)).current;
+
+  // Get user location
+  useEffect(() => {
+    (async () => {
+      const loc = await Location.getCurrentPositionAsync({});
+      setMapRegion({
+        latitude: loc.coords.latitude, longitude: loc.coords.longitude,
+        latitudeDelta: 0.005, longitudeDelta: 0.005,
+      });
+    })();
+  }, []);
+
+  const openSheet = () => {
+    setShowBottomSheet(true);
+    Animated.spring(bottomSheetAnim, {
+      toValue: SNAP_EXPANDED, useNativeDriver: false
+    }).start();
   };
 
-  const [location, setLocation] = useState<Coordinates | null>(null);
-  const [mapRegion, setMapRegion] = useState({
-        latitude: 0,
-        longitude: 0,
-        latitudeDelta: 0.0422,
-        longitudeDelta: 0.0421,
-      }
-  );
-  const [userName] = useState('Maureen');
-  const [expanded, setExpanded] = useState(false);
-  const [currentStep, setCurrentStep] = useState(1);
-  const [keyboardVisible, setKeyboardVisible] = useState(false);
-  const [insurance, setInsurance] = useState('');
-  // Form field state
-  const [formData, setFormData] = useState<DeliveryFormData>({
-    destination: '',
-    packageName: '',
-    packageDescription: '',
-    instructions: '',
-    insurance: '',
-    selectedQualities: [],
-  });
-
-  const [errorMsg, setErrorMsg] = useState(''); 
-  const qualities = ['Fragile', 'Heavy', 'Perishable', 'Urgent'];
-  const GOOGLE_MAPS_API_KEY = "AIzaSyACYutpN5jEGD0vsGBL0b2i3HMYtWXpInQ";
-  const scrollViewRef = useRef<ScrollView>(null);
-
-  useEffect(() => {
-    const getPermissions = async () => {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status === 'granted') console.log('Permission granted');
-    };
-
-    const getCurrentLocation = async () => {
-      
-      let { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        setErrorMsg('Permission to access location was denied');
-        return;
-      }
-
-      let location = await Location.getCurrentPositionAsync({});
-      setMapRegion({
-        latitude: location.coords.latitude,
-        longitude: location.coords.longitude,
-        latitudeDelta: 0.0422,
-        longitudeDelta: 0.0421,
-      });
-    }
-
-    getCurrentLocation();
-    getPermissions();
-
-    // Set up keyboard listeners
-    const keyboardDidShowListener = Keyboard.addListener(
-      'keyboardDidShow',
-      () => {
-        setKeyboardVisible(true);
-        // Expand the bottom sheet when keyboard appears
-        if (!expanded) {
-          setExpanded(true);
-          Animated.spring(bottomSheetHeight, {
-            toValue: screenHeight * 0.7,
-            useNativeDriver: false,
-          }).start();
-        }
-      }
-    );
-    
-    const keyboardDidHideListener = Keyboard.addListener(
-      'keyboardDidHide',
-      () => {
-        setKeyboardVisible(false);
-      }
-    );
-
-    // Clean up listeners
-    return () => {
-      keyboardDidShowListener.remove();
-      keyboardDidHideListener.remove();
-    };
-  }, [expanded]);
-
-  // Bottom sheet animation
-  const bottomSheetHeight = useRef(new Animated.Value(200)).current;
-  const panY = useRef(new Animated.Value(0)).current;
-
-  const panResponder = PanResponder.create({
-    onMoveShouldSetPanResponder: (evt, gestureState) => {
-      return Math.abs(gestureState.dy) > 10;
-    },
-    onPanResponderMove: (evt, gestureState) => {
-      panY.setValue(gestureState.dy);
-    },
-    onPanResponderRelease: (evt, gestureState) => {
-      if (gestureState.dy > 50) {
-        // Swipe down - minimize
-        setExpanded(false);
-        Animated.spring(bottomSheetHeight, {
-          toValue: 200,
-          useNativeDriver: false,
-        }).start();
-      } else if (gestureState.dy < -50) {
-        // Swipe up - expand
-        setExpanded(true);
-        Animated.spring(bottomSheetHeight, {
-          toValue: screenHeight * 0.7,
-          useNativeDriver: false,
-        }).start();
-      }
-      
-      Animated.spring(panY, {
-        toValue: 0,
-        useNativeDriver: false,
-      }).start();
-    },
-  });
+  const closeSheet = () => {
+    Animated.spring(bottomSheetAnim, {
+      toValue: SNAP_COLLAPSED, useNativeDriver: false
+    }).start(() => {
+      setShowBottomSheet(false);
+      setCurrentStep(1);
+    });
+  };
 
   const handleContinue = () => {
-    if (!expanded) {
-      setExpanded(true);
-      Animated.spring(bottomSheetHeight, {
-        toValue: screenHeight * 0.7,
-        useNativeDriver: false,
-      }).start();
-    } else {
-      if (currentStep < 3) {
-        setCurrentStep(currentStep + 1);
-      } else {
-        handleProceed();
-      }
-    }
+    if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (currentStep < 4) setCurrentStep(s => s + 1);
+    else handleCreateOrder();
   };
 
   const handleBack = () => {
-    if (currentStep > 1) {
-      setCurrentStep(currentStep - 1);
-    } else {
-      setExpanded(false);
-      setCurrentStep(1);
-      Animated.spring(bottomSheetHeight, {
-        toValue: 200,
-        useNativeDriver: false,
-      }).start();
+    if (showPayment) {
+      setShowPayment(false); setShowLoading(false); return;
     }
+    if (currentStep > 1) setCurrentStep(s => s - 1);
+    else closeSheet();
   };
 
-  const handleProceed = () => {
-    console.log('Creating delivery request:', formData);
-    // Handle delivery request creation
+  const handleCreateOrder = () => {
+    setShowLoading(true);
+    setTimeout(() => {
+      setShowLoading(false);
+      setShowPayment(true);
+    }, 2000);
   };
 
-  const updateFormData = (key: keyof DeliveryFormData, value: any) => {
-    setFormData(prev => ({
-      ...prev,
-      [key]: value
-    }));
+  const handlePayment = (method: 'paystack' | 'mobile-money') => {
+    if (Platform.OS !== 'web') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    // payment logic
+    closeSheet();
+    setShowPayment(false);
+    setFormData({
+      pickupLocation: '',
+      destinationLocation: '',
+      packageDescription: '',
+      packageWeight: '',
+      weightType: '',
+      courierCapacity: '',
+      itemValue: '',
+      valueRange: 0,
+      vehicleType: '',
+      qualities: [],
+      insurance: false
+    });
   };
 
-  //add quality to selection if not originally part else, remove
-  const toggleQuality = (quality: string) => {
-    const newQualities = formData.selectedQualities.includes(quality)
-      ? formData.selectedQualities.filter(q => q !== quality)
-      : [...formData.selectedQualities, quality];
-    updateFormData('selectedQualities', newQualities);
+  const canContinue = () => {
+    switch (currentStep) {
+      case 1: return formData.pickupLocation && formData.destinationLocation;
+      case 2: return formData.packageDescription && formData.packageWeight;
+      case 3: return formData.courierCapacity && formData.itemValue;
+      case 4: return true;
+    }
+    return false;
   };
 
-  const renderStep1 = () => (
-    <View style={styles.stepContainer}>
-      <Text style={styles.greeting}>Hey {userName}, make a new delivery request</Text>
-      
-     <View style={styles.autocompleteContainer}>
-      {/* <GooglePlacesAutocomplete
-        placeholder="Enter destination location"
-        onPress={(data, details = null) => {
-          setDestination(data.description);
-          updateFormData('destination', data.description);
-          if (details) {
-            setMapRegion({
-              latitude: details.geometry.location.lat,
-              longitude: details.geometry.location.lng,
-              latitudeDelta: 0.0922,
-              longitudeDelta: 0.0421,
-            });
-          }
-        }}
-        query={{
-          key: GOOGLE_MAPS_API_KEY,
-          language: 'en',
-          components: 'country:ke',
-        }}
-        styles={{
-          textInputContainer: styles.autocompleteInputContainer,
-          textInput: styles.autocompleteInput,
-          listView: styles.autocompleteList,
-          row: styles.autocompleteRow,
-          description: styles.autocompleteDescription,
-        }}
-        fetchDetails={true}
-        enablePoweredByContainer={false}
-      /> */}
-       <TextInput
-              style={styles.input}
-              placeholder="Destination Location"
-              placeholderTextColor={Colors.light.placeholder}
-              value={formData.destination}
-              onChangeText={(text) => updateFormData('destination', text)}
+  const renderStepContent = () => {
+    switch (currentStep) {
+      case 1:
+        return <>
+          <Text style={styles.stepTitle}>Where are we picking up and delivering?</Text>
+          {/* Pickup */}
+          <View style={styles.inputContainer}>
+            <MapPin size={20} color={Colors.light.primary} style={styles.inputIcon} />
+            <TextInput
+              placeholder="Pickup location" style={styles.input}
+              value={formData.pickupLocation}
+              onChangeText={t => setFormData(d => ({ ...d, pickupLocation: t }))}
             />
-    </View>
+          </View>
+          {/* Destination */}
+          <View style={styles.inputContainer}>
+            <MapPin size={20} color={Colors.light.primary} style={styles.inputIcon} />
+            <TextInput
+              placeholder="Destination location" style={styles.input}
+              value={formData.destinationLocation}
+              onChangeText={t => setFormData(d => ({ ...d, destinationLocation: t }))}
+            />
+          </View>
+        </>;
+      case 2:
+        return <>
+          <Text style={styles.stepTitle}>Tell us about your package</Text>
+          <View style={styles.inputContainer}>
+            <Package size={20} color={Colors.light.primary} style={styles.inputIcon} />
+            <TextInput
+              placeholder="Description" style={styles.input}
+              value={formData.packageDescription}
+              onChangeText={t => setFormData(d => ({ ...d, packageDescription: t }))}
+            />
+          </View>
+          <View style={styles.inputContainer}>
+            <View style={styles.inputContainer}>
+              <Picker
+                selectedValue={formData.weightType}
+                style={styles.dropdown}
+                onValueChange={(value : string) => setFormData(d => ({ ...d, weightType: value }))}>
+                <Picker.Item label="Weight" value="weight" />
+                <Picker.Item label="Quantity" value="quantity" />
+              </Picker>
+            </View>
+            <TextInput
+              placeholder={formData.weightType === 'weight' ? "Weight (kg)" : "Quantity (e.g. 3)"}
+              style={styles.input}
+              keyboardType="numeric"
+              value={formData.packageWeight}
+              onChangeText={t => setFormData(d => ({ ...d, packageWeight: t }))}
+            />
+          </View>
+          
+          <Text style={styles.stepTitle}>Package Qualities</Text>
+          <View style={styles.qualitiesContainer}>
+            {[
+              { id: 'fragile', label: 'Fragile' },
+              { id: 'urgent', label: 'Urgent' },
+              { id: 'coldchain', label: 'Cold Chain Required' },
+              { id: 'not_waterproof', label: 'Moisture Sensitive' }
+            ].map(quality => (
+              <Chip
+                key={quality.id}
+                mode="outlined"
+                style={[styles.chip, formData.qualities?.includes(quality.id) && styles.chipActive]}
+                textStyle={[styles.chipText, formData.qualities?.includes(quality.id) && styles.chipTextActive]}
+                selected={formData.qualities?.includes(quality.id)}
+                onPress={() => {
+                  const qualities = formData.qualities || [];
+                  const newQualities = qualities.includes(quality.id)
+                    ? qualities.filter((q: string) => q !== quality.id)
+                    : [...qualities, quality.id];
+                  setFormData(d => ({ ...d, qualities: newQualities }));
+                }}
+                selectedColor={Colors.light.primary}
+              >
+                {quality.label}
+              </Chip>
+            ))}
+          </View>
+            
+                      <Text style={styles.stepTitle}>Value Range</Text>
+                      <View style={styles.qualitiesContainer}>
+                        {[
+                          { id: 1, label: '30khs-100khs' },
+                          { id: 2, label: '110khs-500khs' },
+                          { id: 3, label: '510khs-1000khs' },
+                          { id: 4, label: '1000khs+' }
+                        ].map(range => (
+                          <Chip
+                            key={range.id}
+                            mode="outlined"
+                            style={[styles.chip, formData.valueRange === range.id && styles.chipActive]}
+                            textStyle={[styles.chipText, formData.valueRange === range.id && styles.chipTextActive]}
+                            selected={formData.valueRange === range.id}
+                            onPress={() => setFormData(d => ({ ...d, valueRange: range.id }))}
+                            selectedColor={Colors.light.primary}
+                          >
+                            {range.label}
+                          </Chip>
+                        ))}
+                      </View>
+                      <Text style={styles.insuranceNote}>
+                      This info helps us recover costs if goods are insured.
+                    </Text>
+            
+        </>;
+      case 3:
+        return <>
+          <Text style={styles.stepTitle}>Select courier capacity</Text>
+          <View style={styles.capacityContainer}>
+            {[
+              { id: '1', label: 'Bike', icon: 'bike' },
+              { id: '2', label: 'Small Car', icon: 'car' },
+              { id: '3', label: 'Medium Car', icon: 'car-estate' },
+              { id: '4', label: 'Truck', icon: 'truck' }
+            ].map(vehicle => (
+              <TouchableOpacity
+                key={vehicle.id}
+                style={[
+                  styles.vehicleOption,
 
+                  formData.vehicleType === vehicle.id && styles.vehicleOptionActive
+                ]}
+                onPress={() => setFormData(d => ({ ...d, vehicleType: vehicle.id }))}
+              >
+                <MaterialIcons
+                  name={vehicle.icon as keyof typeof MaterialIcons.glyphMap}
+                  size={32}
+                  color={formData.vehicleType === vehicle.id ? Colors.light.primary : Colors.light.text}
+                />
+                <Text style={[
+                    styles.vehicleLabel,
+                    formData.vehicleType === vehicle.id && styles.vehicleLabelActive
+                  ]}>
+                    {vehicle.label}
+                </Text>
+              </TouchableOpacity>
+
+            ))}
+          </View>
+           <Text style={styles.stepTitle}>Add insurance?</Text>
+                  <Checkbox.Item
+                    label="Yes, insure my goods"
+                    status={formData.insurance === true? 'checked' : 'unchecked'}
+                    onPress={() =>     setFormData(d => ({ ...d, insurance: false }))
+                            }                  />
+                  <Checkbox.Item
+                    label="No, do not insure my goods"
+                    status={formData.insurance === false ? 'checked' : 'unchecked'}
+                    onPress={() =>     setFormData(d => ({ ...d, insurance: true }))
+}
+                  />
+                  <Text style={styles.insuranceNote}>
+                    Read terms and conditions for our insurance coverage.
+                  </Text>
+          
+          
+        </>;
+      case 4:
+        return <>
+          <Text style={styles.stepTitle}>Review your order</Text>
+          {/* review card UI */}
+        </>;
+    }
+  };
+
+  if (showLoading) return (
+    <View style={styles.loadingContainer}>
+      <Package size={48} color={Colors.light.primary} />
+      <Text style={styles.loadingText}>Calculating the cost for your convenience…</Text>
     </View>
   );
 
-  const renderStep2 = () => (
-    <View style={styles.stepContainer}>
-      <Text style={styles.stepTitle}>Package Details</Text>
-      
-      <TextInput
-        style={styles.input}
-        placeholder="Package title/name"
-        placeholderTextColor={Colors.light.placeholder}
-        value={formData.packageName}
-        onChangeText={(text) => updateFormData('packageName', text)}
-        onFocus={() => {
-          // Scroll to this input when focused
-          setTimeout(() => {
-            scrollViewRef.current?.scrollTo({ y: 50, animated: true });
-          }, 100);
-        }}
-      />
-
-      <TextInput
-        style={styles.input}
-        placeholder="Package description"
-        placeholderTextColor={Colors.light.placeholder}
-        value={formData.packageDescription}
-        onChangeText={(text) => updateFormData('packageDescription', text)}
-        onFocus={() => {
-          // Scroll to this input when focused
-          setTimeout(() => {
-            scrollViewRef.current?.scrollTo({ y: 120, animated: true });
-          }, 100);
-        }}
-      />
-
-      <Text style={styles.label}>Select package qualities:</Text>
-      <View style={styles.chipContainer}> 
-        {qualities?.map((q) => (
-          <Chip
-            key={q}
-            selected={formData.selectedQualities.includes(q)}
-            onPress={() => toggleQuality(q)}
-            style={[styles.chip , formData.selectedQualities.includes(q) && styles.chipActive ]}
-            textStyle={[styles.chipText, formData.selectedQualities.includes(q) && styles.chipTextActive]}
-          >
-            {q}
-          </Chip>
-        ))}
+  if (showPayment) return (
+    <View style={styles.paymentContainer}>
+      <View style={styles.paymentHeader}>
+        <TouchableOpacity onPress={handleBack} style={styles.backButton}>
+          <ArrowLeft size={24} color={Colors.light.text} />
+        </TouchableOpacity>
+        <Text style={styles.paymentTitle}>Payment</Text>
       </View>
-      
+      {/* Payment Card + Buttons */}
     </View>
   );
-
-  const renderStep3 = () => (
-    <View style={styles.stepContainer}>
-      <Text style={styles.stepTitle}>Additional Information</Text>
-      
-      <TextInput
-        style={[styles.input, styles.textArea]}
-        placeholder="Optional instructions"
-        placeholderTextColor={Colors.light.placeholder}
-        value={formData.instructions}
-        onChangeText={(text) => updateFormData('instructions', text)}
-        multiline
-        numberOfLines={4}
-        onFocus={() => {
-          // Scroll to this input when focused
-          setTimeout(() => {
-            scrollViewRef.current?.scrollTo({ y: 50, animated: true });
-          }, 100);
-        }}
-      />
-
-      <Text style={styles.label}>Add insurance?</Text>
-      
-      <Checkbox.Item
-        label="Yes, insure my goods"
-        status={insurance === 'yes' ? 'checked' : 'unchecked'}
-        onPress={() => setInsurance('yes')}
-      />
-      <Checkbox.Item
-        label="No, do not insure my goods"
-        status={insurance === 'no' ? 'checked' : 'unchecked'}
-        onPress={() => setInsurance('no')}
-      />
-
-      <Text style={styles.link}>
-        Read terms and conditions for our insurance coverage.
-      </Text>
-    </View>
-  );
-
-  const renderCurrentStep = () => {
-    switch (currentStep) {
-      case 1:
-        return renderStep1();
-      case 2:
-        return renderStep2();
-      case 3:
-        return renderStep3();
-      default:
-        return renderStep1();
-    }
-  };
-
-  const isStepValid = () => {
-    switch (currentStep) {
-      case 1:
-        return formData.destination.length > 0;
-      case 2:
-        return formData.packageName.length > 0 && formData.packageDescription.length > 0;
-      case 3:
-        return formData.insurance !== '';
-      default:
-        return false;
-    }
-  };
 
   return (
-    <KeyboardAvoidingView 
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
-    >
-      {mapRegion? 
-      <MapView
-        style={[styles.map]}
-        region={mapRegion}
-        onRegionChangeComplete={setMapRegion}
-      /> :
-      <View>
-         <MapView
-        style={[styles.map]}
-        region={
-          {
-            latitude: 37.78825,
-            longitude: -122.4324,
-            latitudeDelta: 0.0922,
-            longitudeDelta: 0.0421,
-          }
-        }
-        onRegionChangeComplete={setMapRegion}
-      />
-      <Text style={styles.stepTitle}>
-        Please select a destination on the map.
-        </Text>
-      </View>
-      }
-      
+    <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+      <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+        <MapView style={styles.map} region={mapRegion} onRegionChangeComplete={setMapRegion} />
+        <TouchableOpacity style={styles.newOrderButton} onPress={openSheet}>
+          <Text style={styles.newOrderText}>
+            Hey {userName}, start a new order delivery/request...
+          </Text>
+        </TouchableOpacity>
 
-      {/* Bottom Sheet */}
-      <Animated.View
-        style={[
-          styles.bottomSheet,
-          {
-            height: keyboardVisible ? 
-              Platform.OS === 'ios' ? screenHeight * 0.8 : bottomSheetHeight : 
-              bottomSheetHeight,
-            transform: [{ translateY: panY }],
-          },
-        ]}
-        {...panResponder.panHandlers}
-      >
-        {/* Drag Handle */}
-        <View style={styles.dragHandle} />
-
-        <ScrollView 
-          ref={scrollViewRef}
-          style={styles.bottomSheetContent}
-          showsVerticalScrollIndicator={false}
-          bounces={false}
-          keyboardShouldPersistTaps="never"
-          contentContainerStyle={keyboardVisible && { paddingBottom: 200 }}
-        >
-          {renderCurrentStep()}
-
-          {/* Action Buttons */}
-          <View style={styles.buttonContainer}>
-            {expanded && currentStep > 1 && (
-              <TouchableOpacity
-                style={styles.backButton}
-                onPress={handleBack}
-              >
-                <Text style={styles.backButtonText}>Back</Text>
-              </TouchableOpacity>
-            )}
-            
-            <TouchableOpacity
-              style={[
-                styles.continueButton,
-                !isStepValid() && styles.continueButtonDisabled,
-                expanded && currentStep > 1 && styles.continueButtonHalf
-              ]}
-              onPress={handleContinue}
-              disabled={!isStepValid()}
-            >
-              <Text style={styles.continueButtonText}>
-                {currentStep === 3 ? 'Proceed' : 'Continue'}
-              </Text>
-              <ArrowRight size={20} color={Colors.light.background} />
-            </TouchableOpacity>
-          </View>
-
-          {/* Step Indicator */}
-          {expanded && (
-            <View style={styles.stepIndicator}>
-              {[1, 2, 3].map((step) => (
-                <View
-                  key={step}
-                  style={[
-                    styles.stepDot,
-                    step <= currentStep && styles.stepDotActive
-                  ]}
-                />
-              ))}
+        {showBottomSheet && (
+          <Animated.View style={[styles.bottomSheet, { height: bottomSheetAnim }]}>
+            <View style={styles.dragHandle} />
+            <StepIndicator currentStep={currentStep} totalSteps={4} stepTitles={[]} />
+            <ScrollView contentContainerStyle={styles.sheetContent}>
+              {renderStepContent()}
+            </ScrollView>
+            <View style={styles.sheetActions}>
+              {currentStep > 1 && <Button title="Back" onPress={handleBack} variant="outline" />}
+              <Button
+                title={currentStep === 4 ? "Create Order" : "Continue"}
+                onPress={handleContinue}
+                disabled={!canContinue()}
+              />
             </View>
-          )}
-        </ScrollView>
-      </Animated.View>
-    </KeyboardAvoidingView>
+          </Animated.View>
+        )}
+      </KeyboardAvoidingView>
+    </TouchableWithoutFeedback>
   );
 }
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  map: {
-    flex: 1,
-  },
-  mapReduced: {
-    height: '40%', // Reduce map size when keyboard is visible
-  },
-  bottomSheet: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
     backgroundColor: Colors.light.background,
-    borderTopLeftRadius: BORDER_RADIUS.xl,
-    borderTopRightRadius: BORDER_RADIUS.xl,
-    ...SHADOWS.heavy,
   },
-  dragHandle: {
-    width: 40,
-    height: 4,
-    backgroundColor: Colors.light.border,
-    borderRadius: 2,
-    alignSelf: 'center',
-    marginTop: SPACING.sm,
-    marginBottom: SPACING.md,
+   map: { flex: 1 },
+  newOrderButton: {
+    position: 'absolute', top: 50, alignSelf: 'center',
+    backgroundColor: Colors.light.primary, padding: 12,
+    borderRadius: 8
+  },
+  newOrderText: { color: '#fff', fontSize: 16 },
+  bottomSheet: {
+    position: 'absolute', bottom: 0, width: '100%',
+    backgroundColor: '#fff', borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+  },
+  dragHandle: { height: 4, width: 40, backgroundColor: '#ccc', alignSelf: 'center', marginVertical: 8 },
+  sheetContent: { padding: 16 },
+  sheetActions: { flexDirection: 'row', justifyContent: 'space-between', margin: 16 },
+  inputContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
+  inputIcon: { marginRight: 8 },
+  input: {
+    flex: 1, borderWidth: 1, borderColor: '#ddd',
+    borderRadius: 8, padding: 8,
+  },
+  textArea: { height: 80 },
+  stepTitle: { fontSize: 18, fontWeight: '600', marginBottom: 12 },
+  insuranceNote: { fontSize: 12, color: '#555', marginTop: 8 },
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  loadingText: { marginTop: 12, fontSize: 16 },
+  paymentContainer: { flex: 1, padding: 16, backgroundColor: '#fff' },
+  paymentHeader: { flexDirection: 'row', alignItems: 'center' },
+  backButton: { marginRight: 16 },
+  paymentTitle: { fontSize: 20, fontWeight: '600' },
+  mapReduced: {
+    height: '40%',
   },
   bottomSheetContent: {
     flex: 1,
@@ -505,164 +411,219 @@ const styles = StyleSheet.create({
     color: Colors.light.text,
     marginBottom: SPACING.lg,
   },
-  stepTitle: {
-    fontFamily: FONT.poppinsBold,
-    fontSize: FONT_SIZE.lg,
-    color: Colors.light.text,
-    marginBottom: SPACING.md,
-  },
   autocompleteContainer: {
     zIndex: 1000,
     width: '100%',
     marginTop: SPACING.md,
   },
-  autocompleteInputContainer: {
-    backgroundColor: 'transparent',
-    borderTopWidth: 0,
-    borderBottomWidth: 0,
+  content: {
+    padding: SPACING.xl,
   },
-  autocompleteInput: {
-    backgroundColor: '#ccc',
-    borderRadius: BORDER_RADIUS.md,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    fontSize: FONT_SIZE.md,
-    color: Colors.light.text,
-  },
-  autocompleteList: {
-    backgroundColor: '#fff',
-    borderRadius: 8,
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    position: 'absolute',
-    top: 60,
-    left: 0,
-    right: 0,
-    zIndex: 1001,
-  },
-  autocompleteRow: {
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderBottomWidth: 0.5,
-    borderBottomColor: '#ccc',
-  },
-  autocompleteDescription: {
-    fontSize: 14,
-    color: '#333',
-  },
-
-  input: {
-    fontFamily: FONT.regular,
-    fontSize: FONT_SIZE.md,
-    color: Colors.light.text,
-    backgroundColor: Colors.light.card,
-    borderRadius: BORDER_RADIUS.md,
-    borderWidth: 1,
-    borderColor: Colors.light.border,
-    paddingHorizontal: SPACING.md,
-    paddingVertical: SPACING.md,
-    marginBottom: SPACING.md,
-  },
-  textArea: {
-    height: 100,
-    textAlignVertical: 'top',
-  },
-  label: {
-    fontFamily: FONT.medium,
-    fontSize: FONT_SIZE.md,
+  title: {
+    fontSize: 28,
+    fontWeight: '700',
     color: Colors.light.text,
     marginBottom: SPACING.sm,
   },
-  chipContainer: {
+  subtitle: {
+    fontSize: FONT_SIZE.md,
+    color: Colors.light.placeholder,
+    marginBottom: SPACING.xl,
+  },
+  createDeliveryButton: {
+    backgroundColor: Colors.light.primary,
     flexDirection: 'row',
-    flexWrap: 'wrap', 
-    gap: 6 ,
-    padding: 15
-  },
-  chip: {
-    backgroundColor: '#f3f3f3',
-    borderRadius: 20,
-    paddingHorizontal: 12,
-    marginRight: 15,
-  },
-  chipActive: {
-  borderColor: Colors.light.primary
-  },
-  chipText: {
-    fontFamily: FONT.medium,
-    fontSize: FONT_SIZE.sm,
-    color: Colors.light.text,
-  },
-  chipTextActive: {
-    color: '#000',
-    fontWeight: '700',
-  },
-  link: {
-    fontFamily: FONT.regular,
-    fontSize: FONT_SIZE.sm,
-    color: Colors.light.primary,
-    textDecorationLine: 'underline',
-    marginTop: SPACING.sm,
-  },
-  buttonContainer: {
-    flexDirection: 'row',
-    paddingVertical: SPACING.lg,
-    gap: SPACING.md,
-  },
-  backButton: {
-    flex: 1,
-    backgroundColor: Colors.light.card,
-    borderRadius: BORDER_RADIUS.md,
-    paddingVertical: SPACING.md,
     alignItems: 'center',
     justifyContent: 'center',
+    paddingVertical: SPACING.lg,
+    borderRadius: BORDER_RADIUS.md,
+    marginBottom: SPACING.xl,
+    gap: SPACING.sm,
+  },
+  createDeliveryText: {
+    color: '#fff',
+    fontSize: FONT_SIZE.md,
+    fontWeight: '600',
+  },
+  capacityContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    marginTop: 16,
+  },
+  vehicleOption: {
+    width: '48%',
+    backgroundColor: Colors.light.background,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    alignItems: 'center',
     borderWidth: 1,
     borderColor: Colors.light.border,
   },
-  backButtonText: {
-    fontFamily: FONT.medium,
-    fontSize: FONT_SIZE.md,
+  vehicleOptionActive: {
+    backgroundColor: Colors.light.primary,
+    borderColor: Colors.light.primary,
+  },
+  vehicleLabel: {
+    marginTop: 8,
+    fontSize: 14,
+    color: Colors.light.text,
+    textAlign: 'center',
+  },
+  vehicleLabelActive: {
+    color: Colors.light.primary,
+    fontWeight: '600',
+  },
+  optionsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: SPACING.md,
+    marginBottom: SPACING.lg,
+  },
+  optionCard: {
+    width: '47%',
+    backgroundColor: '#F8F9FA',
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+    borderRadius: BORDER_RADIUS.md,
+    padding: SPACING.lg,
+    alignItems: 'center',
+  },
+  qualitiesContainer: {
+    flexDirection: 'row', 
+    flexWrap: 'wrap', 
+    gap: 8 
+  }
+  ,
+  chipContainer: {
+    flexDirection: "row",
+    marginBottom: SPACING.md,
+  },
+  chip: {
+    marginRight: SPACING.md,
+    backgroundColor: Colors.light.background,
+    borderColor: Colors.light.border,
+  },
+  chipText: {
     color: Colors.light.text,
   },
-  continueButton: {
-    flex: 1,
-    backgroundColor: Colors.light.primary,
-    borderRadius: BORDER_RADIUS.md,
-    paddingVertical: SPACING.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: SPACING.sm,
+  chipActive: {
+    backgroundColor: "#FFFFFF",
+    borderColor: Colors.light.primary,
   },
-  continueButtonHalf: {
-    flex: 1,
+  chipTextActive: {
+    color: Colors.light.primary,
+    fontWeight: "600",
   },
-  continueButtonDisabled: {
-    backgroundColor: Colors.light.disabled,
+  selectedOption: {
+    backgroundColor: '#FFF9EC',
+    borderColor: Colors.light.primary,
   },
-  continueButtonText: {
-    fontFamily: FONT.medium,
+  optionIcon: {
+    fontSize: 32,
+    marginBottom: SPACING.sm,
+  },
+  optionLabel: {
     fontSize: FONT_SIZE.md,
-    color: Colors.light.background,
+    fontWeight: '500',
+    color: Colors.light.text,
   },
-  stepIndicator: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingBottom: SPACING.xl,
+  selectedOptionText: {
+    color: Colors.light.primary,
+    fontWeight: '600',
+  },
+  valueOptionsContainer: {
     gap: SPACING.sm,
+    marginBottom: SPACING.lg,
   },
-  stepDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: Colors.light.border,
+  valueOption: {
+    backgroundColor: '#F8F9FA',
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+    borderRadius: BORDER_RADIUS.md,
+    padding: SPACING.md,
   },
-  stepDotActive: {
-    backgroundColor: Colors.light.primary,
+  selectedValueOption: {
+    backgroundColor: '#FFF9EC',
+    borderColor: Colors.light.primary,
+  },
+  valueOptionContent: {
+    gap: SPACING.xs,
+  },
+  valueOptionLabel: {
+    fontSize: FONT_SIZE.md,
+    fontWeight: '500',
+    color: Colors.light.text,
+  },
+  valueOptionRange: {
+    fontSize: FONT_SIZE.sm,
+    color: Colors.light.placeholder,
+  },
+  selectedValueOptionText: {
+    color: Colors.light.primary,
+  },
+  reviewCard: {
+    gap: SPACING.md,
   },
   
+  dropdown: {
+    width: '100%',
+    height: 50,
+    backgroundColor: '#fff',
+  }
+,
+  reviewItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  reviewLabel: {
+    fontSize: FONT_SIZE.md,
+    fontWeight: '500',
+    color: Colors.light.placeholder,
+    flex: 1,
+  },
+  reviewValue: {
+    fontSize: FONT_SIZE.md,
+    color: Colors.light.text,
+    flex: 2,
+    textAlign: 'right',
+  },
+  bottomSheetActions: {
+    flexDirection: 'row',
+    gap: SPACING.md,
+    marginTop: SPACING.xl,
+    paddingTop: SPACING.lg,
+  },
+  backActionButton: {
+    flex: 1,
+  },
+  continueButton: {
+    flex: 2,
+  },
+
+  paymentCard: {
+    margin: SPACING.xl,
+    alignItems: 'center',
+    gap: SPACING.sm,
+  },
+  paymentAmount: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: Colors.light.primary,
+  },
+  paymentDescription: {
+    fontSize: FONT_SIZE.md,
+    color: Colors.light.placeholder,
+    textAlign: 'center',
+  },
+  paymentMethods: {
+    paddingHorizontal: SPACING.xl,
+    gap: SPACING.md,
+  },
+  paymentButton: {
+    marginBottom: SPACING.sm,
+  },
 });

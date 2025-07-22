@@ -87,7 +87,7 @@ export default function BusinessInfoScreen() {
         <View style={styles.inputContainer}>
           <TextInput
             style={styles.input}
-            placeholder="Business Phone Number"
+            placeholder="Business Phone Number *"
             placeholderTextColor={Colors.light.placeholder}
             keyboardType="phone-pad"
             value={formData.phoneNumber}

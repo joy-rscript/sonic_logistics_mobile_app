@@ -57,6 +57,7 @@ export default function VehicleInfoScreen() {
             placeholderTextColor={Colors.light.placeholder}
             value={formData.vehicleType}
             onChangeText={(text) => updateFormData('vehicleType', text)}
+            
           />
           <View style={styles.inputDivider} />
         </View>
@@ -64,7 +65,7 @@ export default function VehicleInfoScreen() {
         <View style={styles.inputContainer}>
           <TextInput
             style={styles.input}
-            placeholder="Vehicle Model"
+            placeholder="Vehicle Model *"
             placeholderTextColor={Colors.light.placeholder}
             value={formData.vehicleModel}
             onChangeText={(text) => updateFormData('vehicleModel', text)}
@@ -80,6 +81,7 @@ export default function VehicleInfoScreen() {
             value={formData.plateNumber}
             onChangeText={(text) => updateFormData('plateNumber', text)}
             autoCapitalize="characters"
+            
           />
           <View style={styles.inputDivider} />
         </View>
@@ -98,7 +100,7 @@ export default function VehicleInfoScreen() {
         <View style={styles.inputContainer}>
           <TextInput
             style={styles.input}
-            placeholder="Vehicle Capacity (kg)"
+            placeholder="Vehicle Capacity (kg) "
             placeholderTextColor={Colors.light.placeholder}
             keyboardType="numeric"
             value={formData.vehicleCapacity}
