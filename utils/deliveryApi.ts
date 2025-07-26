@@ -24,12 +24,12 @@ export interface DeliveryRequest {
   estimate: string;
   pickupCord: {
     latitude: number;
-  pickupLocation: string;
-  dropoffLocation: string;
     longitude: number;
     latitudeDelta: number;
     longitudeDelta: number;
   };
+  pickupLocation: string;
+  dropoffLocation: string;
   dropoffCord: {
     latitude: number;
     longitude: number;
@@ -258,6 +258,7 @@ const mockSMEDeliveries: DeliveryRequest[] = [
         latitudeDelta: 0.0422,
         longitudeDelta: 0.0421,
       },
+    },
   },
   {
     id: 'sme2',
@@ -294,6 +295,7 @@ const mockSMEDeliveries: DeliveryRequest[] = [
       latitudeDelta: 0.0440,
       longitudeDelta: 0.0421,
     },
+    status: 'pending',
   },
 ];
 
@@ -477,44 +479,6 @@ export const updateDeliveryStatus = async (
       };
     }
     throw new Error('Delivery not found');
-  }
-};
-
-export const createDeliveryRequest = async (deliveryData: Partial<DeliveryRequest>): Promise<DeliveryRequest> => {
-  try {
-    const response = await apiClient.post('/deliveries/create', deliveryData);
-    return response.data;
-  } catch (error) {
-    console.warn('API unavailable, using mock data for create delivery:', error);
-    // Return mock created delivery
-    const newDelivery: DeliveryRequest = {
-      id: `mock-${Date.now()}`,
-      location: deliveryData.destination || 'Unknown',
-      price: Math.floor(Math.random() * 50) + 30,
-      clientName: 'TechCorp Solutions',
-      clientType: 'Technology Company',
-      premium: deliveryData.selectedQualities?.includes('Premium') || false,
-      badges: deliveryData.selectedQualities || ['Standard'],
-      pickup: deliveryData.pickup || 'TechCorp Building, Nairobi CBD',
-      dropoff: deliveryData.dropoff || deliveryData.destination || 'Unknown destination',
-      estimate: '5km | 30min',
-      instructions: deliveryData.instructions,
-      pickupCord: deliveryData.pickupCord || {
-        latitude: -1.2921,
-        longitude: 36.8219,
-        latitudeDelta: 0.0422,
-        longitudeDelta: 0.0421,
-      },
-      dropoffCord: deliveryData.dropoffCord || {
-        latitude: -1.2921 + (Math.random() - 0.5) * 0.1,
-        longitude: 36.8219 + (Math.random() - 0.5) * 0.1,
-        latitudeDelta: 0.0440,
-        longitudeDelta: 0.0421,
-      },
-      status: 'pending',
-      ...deliveryData,
-    };
-    return newDelivery;
   }
 };
 
