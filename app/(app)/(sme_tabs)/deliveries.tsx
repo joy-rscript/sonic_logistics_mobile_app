@@ -37,7 +37,7 @@ export default function SMEDeliveriesScreen() {
     : smeDeliveries.filter(s => s.status === activeTab);
 
   const handleDeliveryPress = (delivery: any) => {
-    if (delivery.status === 'accepted' && delivery.driverId) {
+    if (delivery.status === 'accepted' && delivery.CourierDetails?.CourierId) {
       // Navigate to tracking screen
       router.push({
         pathname: '/(app)/(sme_tabs)/tracking',
@@ -90,9 +90,9 @@ export default function SMEDeliveriesScreen() {
               </View>
               
               <View style={styles.packageInfo}>
-                <Text style={styles.packageName}>{shipment.packageName || 'Package'}</Text>
+                <Text style={styles.packageName}>{shipment.PackageDetails?.packageDescription || 'Package'}</Text>
                 <Text style={styles.packageDescription}>
-                  {shipment.packageDescription || 'No description'}
+                  {shipment.PackageDetails?.packageDescription || 'No description'}
                 </Text>
               </View>
 
@@ -100,15 +100,15 @@ export default function SMEDeliveriesScreen() {
                 <View style={styles.routeRow}>
                   <MapPin size={16} color={Colors.light.primary} />
                   <Text style={styles.routeText}>
-                    {shipment.pickup} → {shipment.dropoff}
+                    {shipment.pickupLocation} → {shipment.dropoffLocation}
                   </Text>
                 </View>
               </View>
 
-              {shipment.status === 'accepted' && shipment.driverName && (
+              {shipment.status === 'accepted' && shipment.CourierDetails?.CourierName && (
                 <View style={styles.driverInfo}>
                   <User size={16} color={Colors.light.success} />
-                  <Text style={styles.driverText}>Driver: {shipment.driverName}</Text>
+                  <Text style={styles.driverText}>Driver: {shipment.CourierDetails.CourierName}</Text>
                   <TouchableOpacity style={styles.trackButton}>
                     <Text style={styles.trackButtonText}>Track Live</Text>
                   </TouchableOpacity>
@@ -125,7 +125,7 @@ export default function SMEDeliveriesScreen() {
                     }
                   </Text>
                 </View>
-                <Text style={styles.amountText}>KSh {shipment.price}</Text>
+                <Text style={styles.amountText}>KSh {shipment.PackageDetails?.price || 0}</Text>
               </View>
             </Card>
           </TouchableOpacity>

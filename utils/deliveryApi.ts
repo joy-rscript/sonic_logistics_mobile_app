@@ -3,18 +3,29 @@ import apiClient from './apiClient';
 // Types for API responses
 export interface DeliveryRequest {
   id: string;
-  location: string;
-  price: number;
-  clientName: string;
-  clientType: string;
-  premium: boolean;
-  badges: string[];
-  pickup: string;
-  dropoff: string;
+  ClientDetails: {
+    smeName: string;
+    businessIndustry: string;
+    smeId: string;
+  };
+  PackageDetails: {
+    price: number;
+    insurance: boolean;
+    packageDescription?: string;
+    selectedQualities?: string[];
+    packageWeight: string;
+    courierCapacity: string;
+    itemValue: string;
+    valueRange: number;
+    vehicleType: string;
+    qualities: string[];
+    weightType: string;
+  };
   estimate: string;
-  instructions?: string;
   pickupCord: {
     latitude: number;
+  pickupLocation: string;
+  dropoffLocation: string;
     longitude: number;
     latitudeDelta: number;
     longitudeDelta: number;
@@ -34,36 +45,58 @@ export interface DeliveryRequest {
     dropoffImage: string | null;
   };
   status: 'pending' | 'accepted' | 'in_progress' | 'completed';
-  acceptedAt?: Date;
-  driverId?: string;
-  driverName?: string;
-  driverLocation?: {
-    latitude: number;
-    longitude: number;
-    latitudeDelta: number;
-    longitudeDelta: number;
+  CourierDetails?: {
+    CourierId?: string;
+    CourierName?: string;
+    CourierLocation?: string;
+    CourierCoordinates?: Coordinates;
   };
-  destination?: string;
-  packageName?: string;
-  packageDescription?: string;
-  insurance?: 'yes' | 'no' | '';
-  selectedQualities?: string[];
+}
+
+export interface DeliveryCharges {
+  charges: number;
+  delayPayment: boolean;
+  breakdown: {
+    basePrice: number;
+    distanceCharge: number;
+    weightCharge: number;
+    insuranceCharge: number;
+    premiumCharge: number;
+  };
+}
+
+export interface PaymentRequest {
+  deliveryRequestId: string;
+  amount: number;
+  method: 'card' | 'mobile_money' | 'bank_transfer';
+  smeId: string;
 }
 
 // Mock data for fallback
 const mockAvailableDeliveries: DeliveryRequest[] = [
   {
     id: 'd1',
-    location: 'Nairobi',
-    price: 50,
-    clientName: 'Ben Njoki',
-    clientType: 'Bamburi Cement',
-    premium: true,
-    badges: ['Premium', 'Cold Chain', 'Perishables'],
-    pickup: 'No 2, Balonny Close, Allen Avenue',
-    dropoff: '87, South Lester Street, London Close Belgium',
+    ClientDetails: {
+      smeName: 'Ben Njoki',
+      businessIndustry: 'Cement Manufacturing',
+      smeId: 'sme_001',
+    },
+    PackageDetails: {
+      price: 50,
+      insurance: true,
+      packageDescription: 'Cement bags',
+      selectedQualities: ['Heavy', 'Industrial'],
+      packageWeight: '50',
+      courierCapacity: 'truck',
+      itemValue: '5000',
+      valueRange: 2,
+      vehicleType: 'truck',
+      qualities: ['Heavy', 'Industrial'],
+      weightType: 'weight',
+    },
+    pickupLocation: 'No 2, Balonny Close, Allen Avenue',
+    dropoffLocation: '87, South Lester Street, London Close Belgium',
     estimate: '5km | ESTIMATE TIME 4hrs',
-    instructions: 'Please ensure the package is properly packaged and labeled.',
     pickupCord: {
       latitude: -1.2647,
       longitude: 36.8106,
@@ -80,16 +113,27 @@ const mockAvailableDeliveries: DeliveryRequest[] = [
   },
   {
     id: 'd2',
-    location: 'Kisumu',
-    price: 40,
-    clientName: 'Alice Mumo',
-    clientType: 'FreshFarms',
-    premium: false,
-    badges: ['Standard', 'Fragile'],
-    pickup: 'Plot 6, Otieno Lane',
-    dropoff: 'Main Market Rd, Kisumu',
+    ClientDetails: {
+      smeName: 'Alice Mumo',
+      businessIndustry: 'Agriculture',
+      smeId: 'sme_002',
+    },
+    PackageDetails: {
+      price: 40,
+      insurance: false,
+      packageDescription: 'Fresh produce',
+      selectedQualities: ['Perishable', 'Fragile'],
+      packageWeight: '20',
+      courierCapacity: 'medium_car',
+      itemValue: '2000',
+      valueRange: 1,
+      vehicleType: 'medium_car',
+      qualities: ['Perishable', 'Fragile'],
+      weightType: 'weight',
+    },
+    pickupLocation: 'Plot 6, Otieno Lane',
+    dropoffLocation: 'Main Market Rd, Kisumu',
     estimate: '3km | 2hrs',
-    instructions: 'Handle with care - fragile items inside.',
     pickupCord: {
       latitude: -0.0857,
       longitude: 34.7732,
@@ -109,16 +153,27 @@ const mockAvailableDeliveries: DeliveryRequest[] = [
 const mockAcceptedDeliveries: DeliveryRequest[] = [
   {
     id: 'ongoing1',
-    location: 'Westlands',
-    price: 60,
-    clientName: 'TechCorp Solutions',
-    clientType: 'Technology Company',
-    premium: true,
-    badges: ['Premium', 'Express'],
-    pickup: 'Westlands Square, Nairobi',
-    dropoff: 'KICC, Nairobi CBD',
+    ClientDetails: {
+      smeName: 'TechCorp Solutions',
+      businessIndustry: 'Technology',
+      smeId: 'sme_003',
+    },
+    PackageDetails: {
+      price: 60,
+      insurance: true,
+      packageDescription: 'Electronics',
+      selectedQualities: ['Fragile', 'Urgent'],
+      packageWeight: '5',
+      courierCapacity: 'bike',
+      itemValue: '10000',
+      valueRange: 3,
+      vehicleType: 'bike',
+      qualities: ['Fragile', 'Urgent'],
+      weightType: 'weight',
+    },
+    pickupLocation: 'Westlands Square, Nairobi',
+    dropoffLocation: 'KICC, Nairobi CBD',
     estimate: '7km | 1hr',
-    instructions: 'Deliver to reception desk on 5th floor.',
     pickupCord: {
       latitude: -1.2630,
       longitude: 36.8063,
@@ -133,13 +188,16 @@ const mockAcceptedDeliveries: DeliveryRequest[] = [
     },
     status: 'accepted',
     acceptedAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
-    driverId: 'driver1',
-    driverName: 'Martin Lawrence',
-    driverLocation: {
-      latitude: -1.2650,
-      longitude: 36.8080,
-      latitudeDelta: 0.0422,
-      longitudeDelta: 0.0421,
+    CourierDetails: {
+      CourierId: 'driver1',
+      CourierName: 'Martin Lawrence',
+      CourierLocation: 'En route to pickup',
+      CourierCoordinates: {
+        latitude: -1.2650,
+        longitude: 36.8080,
+        latitudeDelta: 0.0422,
+        longitudeDelta: 0.0421,
+      },
     },
     tracker: {
       pickup: 'completed',
@@ -155,16 +213,27 @@ const mockAcceptedDeliveries: DeliveryRequest[] = [
 const mockSMEDeliveries: DeliveryRequest[] = [
   {
     id: 'sme1',
-    location: 'Nairobi CBD',
-    price: 45,
-    clientName: 'TechCorp Solutions',
-    clientType: 'Technology Company',
-    premium: true,
-    badges: ['Premium', 'Fragile'],
-    pickup: 'TechCorp Building, Nairobi CBD',
-    dropoff: 'Karen Shopping Centre',
+    ClientDetails: {
+      smeName: 'TechCorp Solutions',
+      businessIndustry: 'Technology',
+      smeId: 'sme_003',
+    },
+    PackageDetails: {
+      price: 45,
+      insurance: true,
+      packageDescription: 'Laptop Computer',
+      selectedQualities: ['Fragile', 'Urgent'],
+      packageWeight: '3',
+      courierCapacity: 'bike',
+      itemValue: '50000',
+      valueRange: 3,
+      vehicleType: 'bike',
+      qualities: ['Fragile', 'Urgent'],
+      weightType: 'weight',
+    },
+    pickupLocation: 'TechCorp Building, Nairobi CBD',
+    dropoffLocation: 'Karen Shopping Centre',
     estimate: '12km | 45min',
-    instructions: 'Handle with care - electronics inside.',
     pickupCord: {
       latitude: -1.2921,
       longitude: 36.8219,
@@ -179,30 +248,39 @@ const mockSMEDeliveries: DeliveryRequest[] = [
     },
     status: 'accepted',
     acceptedAt: new Date(Date.now() - 1 * 60 * 60 * 1000),
-    driverId: 'driver2',
-    driverName: 'John Kamau',
-    driverLocation: {
-      latitude: -1.2950,
-      longitude: 36.8100,
-      latitudeDelta: 0.0422,
-      longitudeDelta: 0.0421,
-    },
-    destination: 'Karen Shopping Centre',
-    packageName: 'Laptop Computer',
-    packageDescription: 'Dell Laptop for office use',
-    insurance: 'yes',
-    selectedQualities: ['Fragile', 'Urgent'],
+    CourierDetails: {
+      CourierId: 'driver2',
+      CourierName: 'John Kamau',
+      CourierLocation: 'At pickup location',
+      CourierCoordinates: {
+        latitude: -1.2950,
+        longitude: 36.8100,
+        latitudeDelta: 0.0422,
+        longitudeDelta: 0.0421,
+      },
   },
   {
     id: 'sme2',
-    location: 'Westlands',
-    price: 35,
-    clientName: 'TechCorp Solutions',
-    clientType: 'Technology Company',
-    premium: false,
-    badges: ['Standard'],
-    pickup: 'TechCorp Building, Nairobi CBD',
-    dropoff: 'Westlands Mall',
+    ClientDetails: {
+      smeName: 'TechCorp Solutions',
+      businessIndustry: 'Technology',
+      smeId: 'sme_003',
+    },
+    PackageDetails: {
+      price: 35,
+      insurance: false,
+      packageDescription: 'Office Supplies',
+      selectedQualities: ['Standard'],
+      packageWeight: '10',
+      courierCapacity: 'small_car',
+      itemValue: '1000',
+      valueRange: 1,
+      vehicleType: 'small_car',
+      qualities: ['Standard'],
+      weightType: 'weight',
+    },
+    pickupLocation: 'TechCorp Building, Nairobi CBD',
+    dropoffLocation: 'Westlands Mall',
     estimate: '8km | 30min',
     pickupCord: {
       latitude: -1.2921,
@@ -216,14 +294,102 @@ const mockSMEDeliveries: DeliveryRequest[] = [
       latitudeDelta: 0.0440,
       longitudeDelta: 0.0421,
     },
-    status: 'pending',
-    destination: 'Westlands Mall',
-    packageName: 'Office Supplies',
-    packageDescription: 'Stationery and office materials',
-    insurance: 'no',
-    selectedQualities: ['Standard'],
   },
 ];
+
+// New API functions for SME workflow
+export const createDeliveryRequest = async (deliveryData: {
+  ClientDetails: {
+    smeName: string;
+    businessIndustry: string;
+    smeId: string;
+  };
+  PackageDetails: any;
+  pickupCord: Coordinates;
+  dropoffCord: Coordinates;
+  pickupLocation: string;
+  dropoffLocation: string;
+  estimate: string;
+  status: string;
+}): Promise<DeliveryRequest> => {
+  try {
+    const response = await apiClient.post('/deliveries/create', deliveryData);
+    return response.data;
+  } catch (error) {
+    console.warn('API unavailable, using mock data for create delivery:', error);
+    // Return mock created delivery
+    const newDelivery: DeliveryRequest = {
+      id: `del-${Date.now()}`,
+      ...deliveryData,
+    };
+    return newDelivery;
+  }
+};
+
+export const computeDeliveryCharges = async (input: {
+  packageWeight: string;
+  courierCapacity: string;
+  insurance: boolean;
+  itemValue: string;
+  valueRange: number;
+  vehicleType: string;
+  pickupCord: Coordinates;
+  dropoffCord: Coordinates;
+}): Promise<DeliveryCharges> => {
+  try {
+    const response = await apiClient.post('/deliveries/compute-charges', input);
+    return response.data;
+  } catch (error) {
+    console.warn('API unavailable, using mock data for compute charges:', error);
+    
+    // Mock calculation logic
+    const basePrice = 30;
+    const distance = Math.random() * 20 + 5; // Mock distance 5-25km
+    const distanceCharge = distance * 2;
+    const weightCharge = parseInt(input.packageWeight) * 0.5;
+    const insuranceCharge = input.insurance ? parseFloat(input.itemValue) * 0.02 : 0;
+    const premiumCharge = input.vehicleType === 'bike' ? 10 : input.vehicleType === 'truck' ? 25 : 15;
+    
+    const totalCharges = basePrice + distanceCharge + weightCharge + insuranceCharge + premiumCharge;
+    
+    return {
+      charges: Math.round(totalCharges),
+      delayPayment: totalCharges > 100, // Allow delay payment for orders > 100
+      breakdown: {
+        basePrice,
+        distanceCharge: Math.round(distanceCharge),
+        weightCharge: Math.round(weightCharge),
+        insuranceCharge: Math.round(insuranceCharge),
+        premiumCharge,
+      },
+    };
+  }
+};
+
+export const makePayment = async (paymentData: PaymentRequest): Promise<{ success: boolean; transactionId: string }> => {
+  try {
+    const response = await apiClient.post('/payments/process', paymentData);
+    return response.data;
+  } catch (error) {
+    console.warn('API unavailable, using mock data for payment:', error);
+    return {
+      success: true,
+      transactionId: `txn_${Date.now()}`,
+    };
+  }
+};
+
+export const deleteDeliveryRequest = async (smeId: string, deliveryRequestId: string): Promise<{ success: boolean }> => {
+  try {
+    const response = await apiClient.delete(`/deliveries/${deliveryRequestId}`, {
+      data: { smeId }
+    });
+    return response.data;
+  } catch (error) {
+    console.warn('API unavailable, using mock data for delete delivery:', error);
+    return { success: true };
+  }
+};
 
 // API functions with fallback to mock data
 export const fetchAvailableDeliveries = async (): Promise<DeliveryRequest[]> => {

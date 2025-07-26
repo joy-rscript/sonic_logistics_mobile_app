@@ -1,14 +1,19 @@
 import React, { createContext, useContext, useState, ReactNode } from 'react';
 import { 
-  fetchAvailableDeliveries, 
-  fetchCourierDeliveries, 
+  fetchAvailableDeliveries,
+  fetchCourierDeliveries,
   fetchSMEDeliveries,
   acceptDeliveryRequest,
   updateDeliveryStatus,
-  createDeliveryRequest,
   uploadDeliveryImage,
   verifyDeliveryCode,
-  DeliveryRequest as APIDeliveryRequest
+  createDeliveryRequest,
+  computeDeliveryCharges,
+  makePayment,
+  deleteDeliveryRequest,
+  DeliveryRequest,
+  DeliveryCharges,
+  PaymentRequest
 } from '@/utils/deliveryApi';
 
 export interface DeliveryTracker {
@@ -27,34 +32,6 @@ export interface Coordinates {
   longitudeDelta: number;
 }
 
-export interface DeliveryRequest {
-  id: string;
-  location: string;
-  price: number;
-  clientName: string;
-  clientType: string;
-  premium: boolean;
-  badges: string[];
-  pickup: string;
-  dropoff: string;
-  estimate: string;
-  instructions?: string;
-  pickupCord: Coordinates;
-  dropoffCord: Coordinates;
-  tracker?: DeliveryTracker;
-  status: 'pending' | 'accepted' | 'in_progress' | 'completed';
-  acceptedAt?: Date;
-  driverId?: string;
-  driverName?: string;
-  driverLocation?: Coordinates;
-  // SME form fields
-  destination?: string;
-  packageName?: string;
-  packageDescription?: string;
-  insurance?: 'yes' | 'no' | '';
-  selectedQualities?: string[];
-}
-
 interface DeliveryContextType {
   allDeliveries: DeliveryRequest[];
   pendingOngoingDeliveries: DeliveryRequest[];
@@ -66,7 +43,10 @@ interface DeliveryContextType {
   setCurrentDelivery: (delivery: DeliveryRequest | null) => void;
   updateDeliveryTracker: (deliveryId: string, tracker: Partial<DeliveryTracker>) => void;
   completeDelivery: (deliveryId: string) => void;
-  createNewDelivery: (delivery: Partial<DeliveryRequest>) => void;
+  createNewDelivery: (deliveryData: any) => Promise<DeliveryRequest>;
+  computeCharges: (input: any) => Promise<DeliveryCharges>;
+  processPayment: (paymentData: PaymentRequest) => Promise<{ success: boolean; transactionId: string }>;
+  deleteDelivery: (smeId: string, deliveryId: string) => Promise<{ success: boolean }>;
   updateDriverLocation: (deliveryId: string, location: Coordinates) => void;
   getDeliveryById: (id: string) => DeliveryRequest | null;
   refreshDeliveries: () => Promise<void>;
@@ -87,16 +67,27 @@ const mockDrivers = [
 const allAvailableDeliveries: DeliveryRequest[] = [
   {
     id: 'd1',
-    location: 'Nairobi',
-    price: 50,
-    clientName: 'Ben Njoki',
-    clientType: 'Bamburi Cement',
-    premium: true,
-    badges: ['Premium', 'Cold Chain', 'Perishables'],
-    pickup: 'No 2, Balonny Close, Allen Avenue',
-    dropoff: '87, South Lester Street, London Close Belgium',
+    ClientDetails: {
+      smeName: 'Ben Njoki',
+      businessIndustry: 'Cement Manufacturing',
+      smeId: 'sme_001',
+    },
+    PackageDetails: {
+      price: 50,
+      insurance: true,
+      packageDescription: 'Cement bags',
+      selectedQualities: ['Heavy', 'Industrial'],
+      packageWeight: '50',
+      courierCapacity: 'truck',
+      itemValue: '5000',
+      valueRange: 2,
+      vehicleType: 'truck',
+      qualities: ['Heavy', 'Industrial'],
+      weightType: 'weight',
+    },
+    pickupLocation: 'No 2, Balonny Close, Allen Avenue',
+    dropoffLocation: '87, South Lester Street, London Close Belgium',
     estimate: '5km | ESTIMATE TIME 4hrs',
-    instructions: 'Please ensure the package is properly packaged and labeled.',
     pickupCord: {
       latitude: -1.2647,
       longitude: 36.8106,
@@ -113,16 +104,27 @@ const allAvailableDeliveries: DeliveryRequest[] = [
   },
   {
     id: 'd2',
-    location: 'Kisumu',
-    price: 40,
-    clientName: 'Alice Mumo',
-    clientType: 'FreshFarms',
-    premium: false,
-    badges: ['Standard', 'Fragile'],
-    pickup: 'Plot 6, Otieno Lane',
-    dropoff: 'Main Market Rd, Kisumu',
+    ClientDetails: {
+      smeName: 'Alice Mumo',
+      businessIndustry: 'Agriculture',
+      smeId: 'sme_002',
+    },
+    PackageDetails: {
+      price: 40,
+      insurance: false,
+      packageDescription: 'Fresh produce',
+      selectedQualities: ['Perishable', 'Fragile'],
+      packageWeight: '20',
+      courierCapacity: 'medium_car',
+      itemValue: '2000',
+      valueRange: 1,
+      vehicleType: 'medium_car',
+      qualities: ['Perishable', 'Fragile'],
+      weightType: 'weight',
+    },
+    pickupLocation: 'Plot 6, Otieno Lane',
+    dropoffLocation: 'Main Market Rd, Kisumu',
     estimate: '3km | 2hrs',
-    instructions: 'Handle with care - fragile items inside.',
     pickupCord: {
       latitude: -0.0857,
       longitude: 34.7732,
@@ -143,16 +145,27 @@ const allAvailableDeliveries: DeliveryRequest[] = [
 const mockAcceptedDeliveries: DeliveryRequest[] = [
   {
     id: 'ongoing1',
-    location: 'Westlands',
-    price: 60,
-    clientName: 'TechCorp Solutions',
-    clientType: 'Technology Company',
-    premium: true,
-    badges: ['Premium', 'Express'],
-    pickup: 'Westlands Square, Nairobi',
-    dropoff: 'KICC, Nairobi CBD',
+    ClientDetails: {
+      smeName: 'TechCorp Solutions',
+      businessIndustry: 'Technology',
+      smeId: 'sme_003',
+    },
+    PackageDetails: {
+      price: 60,
+      insurance: true,
+      packageDescription: 'Electronics',
+      selectedQualities: ['Fragile', 'Urgent'],
+      packageWeight: '5',
+      courierCapacity: 'bike',
+      itemValue: '10000',
+      valueRange: 3,
+      vehicleType: 'bike',
+      qualities: ['Fragile', 'Urgent'],
+      weightType: 'weight',
+    },
+    pickupLocation: 'Westlands Square, Nairobi',
+    dropoffLocation: 'KICC, Nairobi CBD',
     estimate: '7km | 1hr',
-    instructions: 'Deliver to reception desk on 5th floor.',
     pickupCord: {
       latitude: -1.2630,
       longitude: 36.8063,
@@ -167,13 +180,16 @@ const mockAcceptedDeliveries: DeliveryRequest[] = [
     },
     status: 'accepted',
     acceptedAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
-    driverId: 'driver1',
-    driverName: 'Martin Lawrence',
-    driverLocation: {
-      latitude: -1.2650,
-      longitude: 36.8080,
-      latitudeDelta: 0.0422,
-      longitudeDelta: 0.0421,
+    CourierDetails: {
+      CourierId: 'driver1',
+      CourierName: 'Martin Lawrence',
+      CourierLocation: 'En route to pickup',
+      CourierCoordinates: {
+        latitude: -1.2650,
+        longitude: 36.8080,
+        latitudeDelta: 0.0422,
+        longitudeDelta: 0.0421,
+      },
     },
     tracker: {
       pickup: 'completed',
@@ -190,16 +206,27 @@ const mockAcceptedDeliveries: DeliveryRequest[] = [
 const mockSMEDeliveries: DeliveryRequest[] = [
   {
     id: 'sme1',
-    location: 'Nairobi CBD',
-    price: 45,
-    clientName: 'TechCorp Solutions',
-    clientType: 'Technology Company',
-    premium: true,
-    badges: ['Premium', 'Fragile'],
-    pickup: 'TechCorp Building, Nairobi CBD',
-    dropoff: 'Karen Shopping Centre',
+    ClientDetails: {
+      smeName: 'TechCorp Solutions',
+      businessIndustry: 'Technology',
+      smeId: 'sme_003',
+    },
+    PackageDetails: {
+      price: 45,
+      insurance: true,
+      packageDescription: 'Laptop Computer',
+      selectedQualities: ['Fragile', 'Urgent'],
+      packageWeight: '3',
+      courierCapacity: 'bike',
+      itemValue: '50000',
+      valueRange: 3,
+      vehicleType: 'bike',
+      qualities: ['Fragile', 'Urgent'],
+      weightType: 'weight',
+    },
+    pickupLocation: 'TechCorp Building, Nairobi CBD',
+    dropoffLocation: 'Karen Shopping Centre',
     estimate: '12km | 45min',
-    instructions: 'Handle with care - electronics inside.',
     pickupCord: {
       latitude: -1.2921,
       longitude: 36.8219,
@@ -214,31 +241,40 @@ const mockSMEDeliveries: DeliveryRequest[] = [
     },
     status: 'accepted',
     acceptedAt: new Date(Date.now() - 1 * 60 * 60 * 1000),
-    driverId: 'driver2',
-    driverName: 'John Kamau',
-    driverLocation: {
-      latitude: -1.2950,
-      longitude: 36.8100,
-      latitudeDelta: 0.0422,
-      longitudeDelta: 0.0421,
+    CourierDetails: {
+      CourierId: 'driver2',
+      CourierName: 'John Kamau',
+      CourierLocation: 'At pickup location',
+      CourierCoordinates: {
+        latitude: -1.2950,
+        longitude: 36.8100,
+        latitudeDelta: 0.0422,
+        longitudeDelta: 0.0421,
+      },
     },
-    // SME form data
-    destination: 'Karen Shopping Centre',
-    packageName: 'Laptop Computer',
-    packageDescription: 'Dell Laptop for office use',
-    insurance: 'yes',
-    selectedQualities: ['Fragile', 'Urgent'],
   },
   {
     id: 'sme2',
-    location: 'Westlands',
-    price: 35,
-    clientName: 'TechCorp Solutions',
-    clientType: 'Technology Company',
-    premium: false,
-    badges: ['Standard'],
-    pickup: 'TechCorp Building, Nairobi CBD',
-    dropoff: 'Westlands Mall',
+    ClientDetails: {
+      smeName: 'TechCorp Solutions',
+      businessIndustry: 'Technology',
+      smeId: 'sme_003',
+    },
+    PackageDetails: {
+      price: 35,
+      insurance: false,
+      packageDescription: 'Office Supplies',
+      selectedQualities: ['Standard'],
+      packageWeight: '10',
+      courierCapacity: 'small_car',
+      itemValue: '1000',
+      valueRange: 1,
+      vehicleType: 'small_car',
+      qualities: ['Standard'],
+      weightType: 'weight',
+    },
+    pickupLocation: 'TechCorp Building, Nairobi CBD',
+    dropoffLocation: 'Westlands Mall',
     estimate: '8km | 30min',
     pickupCord: {
       latitude: -1.2921,
@@ -253,12 +289,6 @@ const mockSMEDeliveries: DeliveryRequest[] = [
       longitudeDelta: 0.0421,
     },
     status: 'pending',
-    // SME form data
-    destination: 'Westlands Mall',
-    packageName: 'Office Supplies',
-    packageDescription: 'Stationery and office materials',
-    insurance: 'no',
-    selectedQualities: ['Standard'],
   },
 ];
 
@@ -308,7 +338,7 @@ export function DeliveryProvider({ children }: { children: ReactNode }) {
       setSmeDeliveries(prev => 
         prev.map(d => 
           d.id === deliveryId 
-            ? { ...d, status: 'accepted', driverId: acceptedDelivery.driverId, driverName: acceptedDelivery.driverName, acceptedAt: new Date() }
+            ? { ...d, status: 'accepted', CourierDetails: acceptedDelivery.CourierDetails, acceptedAt: new Date() }
             : d
         )
       );
@@ -359,7 +389,7 @@ export function DeliveryProvider({ children }: { children: ReactNode }) {
       setSmeDeliveries(prev => 
         prev.map(d => 
           d.id === deliveryId 
-            ? { ...d, status: 'accepted', driverId: randomDriver.id, driverName: randomDriver.name, acceptedAt: new Date() }
+            ? { ...d, status: 'accepted', CourierDetails: { CourierId: randomDriver.id, CourierName: randomDriver.name }, acceptedAt: new Date() }
             : d
         )
       );
@@ -480,7 +510,7 @@ export function DeliveryProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const createNewDelivery = async (deliveryData: Partial<DeliveryRequest>) => {
+  const createNewDelivery = async (deliveryData: any): Promise<DeliveryRequest> => {
     setLoading(true);
     setError(null);
     try {
@@ -489,50 +519,83 @@ export function DeliveryProvider({ children }: { children: ReactNode }) {
       // Add to both SME deliveries and available deliveries
       setSmeDeliveries(prev => [...prev, newDelivery]);
       setAllDeliveries(prev => [...prev, newDelivery]);
+      
+      return newDelivery;
     } catch (err) {
       setError('Failed to create delivery');
       console.error('Error creating delivery:', err);
       
       // Fallback to original logic
-      createNewDeliveryFallback(deliveryData);
+      return createNewDeliveryFallback(deliveryData);
     } finally {
       setLoading(false);
     }
   };
 
   // Original createNewDelivery logic moved to fallback
-  const createNewDeliveryFallback = (deliveryData: Partial<DeliveryRequest>) => {
+  const createNewDeliveryFallback = (deliveryData: any): DeliveryRequest => {
     const newDelivery: DeliveryRequest = {
       id: `sme-${Date.now()}`,
-      location: deliveryData.destination || 'Unknown',
-      price: Math.floor(Math.random() * 50) + 30, // Random price between 30-80
-      clientName: 'TechCorp Solutions', // This would come from user context
-      clientType: 'Technology Company',
-      premium: deliveryData.selectedQualities?.includes('Premium') || false,
-      badges: deliveryData.selectedQualities || ['Standard'],
-      pickup: deliveryData.pickup || 'TechCorp Building, Nairobi CBD',
-      dropoff: deliveryData.dropoff || deliveryData.destination || 'Unknown destination',
-      estimate: '5km | 30min', // This would be calculated
-      instructions: deliveryData.instructions,
-      pickupCord: deliveryData.pickupCord || {
-        latitude: -1.2921,
-        longitude: 36.8219,
-        latitudeDelta: 0.0422,
-        longitudeDelta: 0.0421,
-      },
-      dropoffCord: deliveryData.dropoffCord || {
-        latitude: -1.2921,
-        longitude: 36.8219,
-        latitudeDelta: 0.0422,
-        longitudeDelta: 0.0421,
-      },
-      status: 'pending',
       ...deliveryData,
     };
 
     // Add to both SME deliveries and available deliveries
     setSmeDeliveries(prev => [...prev, newDelivery]);
     setAllDeliveries(prev => [...prev, newDelivery]);
+    
+    return newDelivery;
+  };
+
+  const computeCharges = async (input: any): Promise<DeliveryCharges> => {
+    setLoading(true);
+    setError(null);
+    try {
+      const charges = await computeDeliveryCharges(input);
+      return charges;
+    } catch (err) {
+      setError('Failed to compute charges');
+      console.error('Error computing charges:', err);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const processPayment = async (paymentData: PaymentRequest): Promise<{ success: boolean; transactionId: string }> => {
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await makePayment(paymentData);
+      return result;
+    } catch (err) {
+      setError('Failed to process payment');
+      console.error('Error processing payment:', err);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const deleteDelivery = async (smeId: string, deliveryId: string): Promise<{ success: boolean }> => {
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await deleteDeliveryRequest(smeId, deliveryId);
+      
+      if (result.success) {
+        // Remove from local state
+        setSmeDeliveries(prev => prev.filter(d => d.id !== deliveryId));
+        setAllDeliveries(prev => prev.filter(d => d.id !== deliveryId));
+      }
+      
+      return result;
+    } catch (err) {
+      setError('Failed to delete delivery');
+      console.error('Error deleting delivery:', err);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
   };
 
   const updateDriverLocation = async (deliveryId: string, location: Coordinates) => {
@@ -543,13 +606,13 @@ export function DeliveryProvider({ children }: { children: ReactNode }) {
     }
 
     const updateLocation = (delivery: DeliveryRequest) => 
-      delivery.id === deliveryId ? { ...delivery, driverLocation: location } : delivery;
+      delivery.id === deliveryId ? { ...delivery, CourierDetails: { ...delivery.CourierDetails, CourierCoordinates: location } } : delivery;
 
     setPendingOngoingDeliveries(prev => prev.map(updateLocation));
     setSmeDeliveries(prev => prev.map(updateLocation));
     
     if (currentDelivery?.id === deliveryId) {
-      setCurrentDeliveryState(prev => prev ? { ...prev, driverLocation: location } : null);
+      setCurrentDeliveryState(prev => prev ? { ...prev, CourierDetails: { ...prev.CourierDetails, CourierCoordinates: location } } : null);
     }
   };
 
@@ -615,6 +678,9 @@ export function DeliveryProvider({ children }: { children: ReactNode }) {
       updateDeliveryTracker,
       completeDelivery,
       createNewDelivery,
+      computeCharges,
+      processPayment,
+      deleteDelivery,
       updateDriverLocation,
       getDeliveryById,
       refreshDeliveries,

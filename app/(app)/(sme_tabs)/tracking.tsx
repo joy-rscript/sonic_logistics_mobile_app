@@ -31,10 +31,10 @@ export default function TrackingScreen() {
 
   // Simulate real-time driver location updates
   useEffect(() => {
-    if (!delivery || !delivery.driverLocation) return;
+    if (!delivery || !delivery.CourierDetails?.CourierCoordinates) return;
 
     const interval = setInterval(() => {
-      const currentLocation = delivery.driverLocation!;
+      const currentLocation = delivery.CourierDetails!.CourierCoordinates!;
       const targetLocation = delivery.tracker?.pickup === 'completed' 
         ? delivery.dropoffCord 
         : delivery.pickupCord;
@@ -176,16 +176,16 @@ export default function TrackingScreen() {
       {/* Map */}
       <MapView
         style={styles.map}
-        region={delivery.driverLocation || currentTarget.coordinates}
+        region={delivery.CourierDetails?.CourierCoordinates || currentTarget.coordinates}
         showsUserLocation={false}
         showsMyLocationButton={false}
       >
         {/* Driver Location Marker */}
-        {delivery.driverLocation && (
+        {delivery.CourierDetails?.CourierCoordinates && (
           <Marker
-            coordinate={delivery.driverLocation}
+            coordinate={delivery.CourierDetails.CourierCoordinates}
             title="Driver Location"
-            description={delivery.driverName}
+            description={delivery.CourierDetails.CourierName}
             pinColor={Colors.light.primary}
           />
         )}
@@ -194,7 +194,7 @@ export default function TrackingScreen() {
         <Marker
           coordinate={delivery.pickupCord}
           title="Pickup Location"
-          description={delivery.pickup}
+          description={delivery.pickupLocation}
           pinColor={delivery.tracker?.pickup === 'completed' ? Colors.light.success : Colors.light.warning}
         />
 
@@ -202,7 +202,7 @@ export default function TrackingScreen() {
         <Marker
           coordinate={delivery.dropoffCord}
           title="Dropoff Location"
-          description={delivery.dropoff}
+          description={delivery.dropoffLocation}
           pinColor={delivery.tracker?.dropoff === 'completed' ? Colors.light.success : Colors.light.error}
         />
 
@@ -245,11 +245,11 @@ export default function TrackingScreen() {
             <View style={styles.packageHeader}>
               <Package size={20} color={Colors.light.primary} />
               <Text style={styles.packageTitle}>
-                {delivery.packageName || 'Package Details'}
+                {delivery.PackageDetails?.packageDescription || 'Package Details'}
               </Text>
             </View>
             <Text style={styles.packageDescription}>
-              {delivery.packageDescription || 'No description available'}
+              {delivery.PackageDetails?.packageDescription || 'No description available'}
             </Text>
             <Text style={styles.trackingNumber}>
               Tracking: #{delivery.id.slice(-6).toUpperCase()}
@@ -257,11 +257,11 @@ export default function TrackingScreen() {
           </Card>
 
           {/* Driver Info */}
-          {delivery.driverName && (
+          {delivery.CourierDetails?.CourierName && (
             <Card style={styles.driverCard}>
               <View style={styles.driverHeader}>
                 <View style={styles.driverInfo}>
-                  <Text style={styles.driverName}>{delivery.driverName}</Text>
+                  <Text style={styles.driverName}>{delivery.CourierDetails.CourierName}</Text>
                   <Text style={styles.driverRole}>Your Driver</Text>
                 </View>
                 <View style={styles.driverActions}>
@@ -287,7 +287,7 @@ export default function TrackingScreen() {
               </View>
               <View style={styles.routeDetails}>
                 <Text style={styles.routeLabel}>Pickup</Text>
-                <Text style={styles.routeAddress}>{delivery.pickup}</Text>
+                <Text style={styles.routeAddress}>{delivery.pickupLocation}</Text>
               </View>
             </View>
 
@@ -302,7 +302,7 @@ export default function TrackingScreen() {
               </View>
               <View style={styles.routeDetails}>
                 <Text style={styles.routeLabel}>Dropoff</Text>
-                <Text style={styles.routeAddress}>{delivery.dropoff}</Text>
+                <Text style={styles.routeAddress}>{delivery.dropoffLocation}</Text>
               </View>
             </View>
           </View>

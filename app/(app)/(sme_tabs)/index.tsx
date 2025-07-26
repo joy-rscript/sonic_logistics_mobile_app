@@ -2,11 +2,12 @@ import { useState, useRef, useEffect } from 'react';
 import { 
   StyleSheet, Text, View, SafeAreaView, TextInput, TouchableOpacity, ScrollView, 
   Dimensions, PanResponder, Animated, Platform, Keyboard, KeyboardAvoidingView,
-  TouchableWithoutFeedback
+  TouchableWithoutFeedback, Modal, ActivityIndicator
 } from 'react-native';
 import { Chip, Checkbox } from 'react-native-paper';
 import MapView, { Marker } from 'react-native-maps';
-import { MapPin, Package, Shield, Clock, ArrowRight } from 'lucide-react-native';
+import { MapPin, Package, Shield, Clock, ArrowRight, CreditCard, Calendar } from 'lucide-react-native';
+import LottieView from 'lottie-react-native';
 import Colors from '@/constants/Colors';
 import { SPACING, FONT, FONT_SIZE, BORDER_RADIUS, SHADOWS } from '@/constants/Theme';
 import { Button } from '@/components/ui/Button';
@@ -14,7 +15,8 @@ import { Card } from '@/components/ui/Card';
 import * as Location from 'expo-location';
 import { useDelivery } from '@/contexts/DeliveryContext';
 import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
-import { Picker } from '@react-native-picker/picker'
+import { Picker } from '@react-native-picker/picker';
+import { createDeliveryRequest, computeDeliveryCharges, makePayment, DeliveryCharges } from '@/utils/deliveryApi';
 
 const { height: screenHeight, width: screenWidth } = Dimensions.get('window');
 
@@ -34,9 +36,9 @@ interface DeliveryForm {
   packageWeight: string;
   courierCapacity: string;
   itemValue: string;
-  vehicleType:string,
+  vehicleType: string;
   valueRange: number;
-  insurance : boolean;
+  insurance: boolean;
 }
 
 export default function SMEHomeScreen() {
@@ -61,9 +63,17 @@ export default function SMEHomeScreen() {
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [insurance, setInsurance] = useState('');
   const [bottomSheetHeight, setBottomSheetHeight] = useState(SNAP_POINTS.COLLAPSED);
+  
+  // New states for payment flow
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [isCalculatingCharges, setIsCalculatingCharges] = useState(false);
+  const [deliveryCharges, setDeliveryCharges] = useState<DeliveryCharges | null>(null);
+  const [createdDeliveryId, setCreatedDeliveryId] = useState<string | null>(null);
+  const [paymentMethod, setPaymentMethod] = useState<'card' | 'mobile_money' | 'bank_transfer'>('mobile_money');
+  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
 
   // Form field state
- const [formData, setFormData] = useState<DeliveryForm>({
+  const [formData, setFormData] = useState<DeliveryForm>({
     pickupLocation: '', 
     destinationLocation: '',
     packageDescription: '', 
@@ -74,7 +84,7 @@ export default function SMEHomeScreen() {
     vehicleType: '',
     qualities: [],
     weightType: '',
-    insurance : false
+    insurance: false
   });
 
   const [errorMsg, setErrorMsg] = useState(''); 
@@ -201,7 +211,7 @@ export default function SMEHomeScreen() {
       if (currentStep < 3) {
         setCurrentStep(currentStep + 1);
       } else {
-        handleProceed();
+        handleProceedToPayment();
       }
     }
   };
@@ -219,39 +229,125 @@ export default function SMEHomeScreen() {
     }
   };
 
-  const { createNewDelivery } = useDelivery();
+  const handleProceedToPayment = async () => {
+    setIsCalculatingCharges(true);
+    
+    try {
+      // Step 1: Create delivery request
+      const deliveryData = {
+        ClientDetails: {
+          smeName: 'TechCorp Solutions', // This should come from user context
+          businessIndustry: 'Technology',
+          smeId: 'sme_003', // This should come from user context
+        },
+        PackageDetails: {
+          ...formData,
+          price: 0, // Will be updated after charge calculation
+        },
+        pickupCord: {
+          latitude: mapRegion.latitude,
+          longitude: mapRegion.longitude,
+          latitudeDelta: 0.0422,
+          longitudeDelta: 0.0421,
+        },
+        dropoffCord: {
+          latitude: mapRegion.latitude + 0.01,
+          longitude: mapRegion.longitude + 0.01,
+          latitudeDelta: 0.0422,
+          longitudeDelta: 0.0421,
+        },
+        pickupLocation: formData.pickupLocation,
+        dropoffLocation: formData.destinationLocation,
+        estimate: '0',
+        status: 'pending',
+      };
 
-  const handleProceed = () => {
-    console.log('Creating delivery request:', formData);
+      const createdDelivery = await createDeliveryRequest(deliveryData);
+      setCreatedDeliveryId(createdDelivery.id);
 
-    createNewDelivery({
-      pickup: formData.pickupLocation,
-      dropoff: formData.destinationLocation,
-      packageDescription: formData.packageDescription,
-      selectedQualities: formData.qualities,
-      insurance: formData.insurance ? 'yes' : 'no',
-      destination: formData.destinationLocation,
-      packageName: formData.packageDescription,
-      status: 'pending',
-    });
+      // Step 2: Compute delivery charges
+      const chargesInput = {
+        packageWeight: formData.packageWeight,
+        courierCapacity: formData.courierCapacity,
+        insurance: formData.insurance,
+        itemValue: formData.itemValue,
+        valueRange: formData.valueRange,
+        vehicleType: formData.vehicleType,
+        pickupCord: deliveryData.pickupCord,
+        dropoffCord: deliveryData.dropoffCord,
+      };
 
-    // Reset form
+      const charges = await computeDeliveryCharges(chargesInput);
+      setDeliveryCharges(charges);
+      
+      setIsCalculatingCharges(false);
+      setShowPaymentModal(true);
+      
+    } catch (error) {
+      console.error('Error in payment flow:', error);
+      setIsCalculatingCharges(false);
+      setErrorMsg('Failed to process delivery request. Please try again.');
+    }
+  };
+
+  const handlePayNow = async () => {
+    if (!deliveryCharges || !createdDeliveryId) return;
+    
+    setIsProcessingPayment(true);
+    
+    try {
+      const paymentData = {
+        deliveryRequestId: createdDeliveryId,
+        amount: deliveryCharges.charges,
+        method: paymentMethod,
+        smeId: 'sme_003', // This should come from user context
+      };
+
+      const paymentResult = await makePayment(paymentData);
+      
+      if (paymentResult.success) {
+        // Reset form and close modals
+        resetForm();
+        setShowPaymentModal(false);
+        // Show success message or navigate to deliveries screen
+        alert('Payment successful! Your delivery request has been submitted.');
+      } else {
+        setErrorMsg('Payment failed. Please try again.');
+      }
+    } catch (error) {
+      console.error('Payment error:', error);
+      setErrorMsg('Payment processing failed. Please try again.');
+    } finally {
+      setIsProcessingPayment(false);
+    }
+  };
+
+  const handlePayLater = () => {
+    // Reset form and close modals
+    resetForm();
+    setShowPaymentModal(false);
+    alert('Delivery request submitted! You can pay when the courier arrives.');
+  };
+
+  const resetForm = () => {
     setFormData({
-       pickupLocation: '', 
-    destinationLocation: '',
-    packageDescription: '', 
-    packageWeight: '',
-    courierCapacity: '', 
-    itemValue: '',
-    valueRange: 0,
-    vehicleType: '',
-    qualities: [],
-    weightType: '',
-    insurance : false
+      pickupLocation: '', 
+      destinationLocation: '',
+      packageDescription: '', 
+      packageWeight: '',
+      courierCapacity: '', 
+      itemValue: '',
+      valueRange: 0,
+      vehicleType: '',
+      qualities: [],
+      weightType: '',
+      insurance: false
     });
     setInsurance('');
     setExpanded(false);
     setCurrentStep(1);
+    setDeliveryCharges(null);
+    setCreatedDeliveryId(null);
     snapToPosition(SNAP_POINTS.COLLAPSED);
   };
 
@@ -273,7 +369,7 @@ export default function SMEHomeScreen() {
     Keyboard.dismiss();
   };
 
- const renderStepContent = () => {
+  const renderStepContent = () => {
     switch (currentStep) {
       case 1:
         return <>
@@ -313,7 +409,7 @@ export default function SMEHomeScreen() {
               <Picker
                 selectedValue={formData.weightType}
                 style={styles.dropdown}
-                onValueChange={(value : string) => setFormData(d => ({ ...d, weightType: value }))}>
+                onValueChange={(value: string) => setFormData(d => ({ ...d, weightType: value }))}>
                 <Picker.Item label="Weight" value="weight" />
                 <Picker.Item label="Quantity" value="quantity" />
               </Picker>
@@ -355,31 +451,30 @@ export default function SMEHomeScreen() {
             ))}
           </View>
             
-                      <Text style={styles.stepTitle}>Value Range</Text>
-                      <View style={styles.qualitiesContainer}>
-                        {[
-                          { id: 1, label: '30khs-100khs' },
-                          { id: 2, label: '110khs-500khs' },
-                          { id: 3, label: '510khs-1000khs' },
-                          { id: 4, label: '1000khs+' }
-                        ].map(range => (
-                          <Chip
-                            key={range.id}
-                            mode="outlined"
-                            style={[styles.chip, formData.valueRange === range.id && styles.chipActive]}
-                            textStyle={[styles.chipText, formData.valueRange === range.id && styles.chipTextActive]}
-                            selected={formData.valueRange === range.id}
-                            onPress={() => setFormData(d => ({ ...d, valueRange: range.id }))}
-                            selectedColor={Colors.light.primary}
-                          >
-                            {range.label}
-                          </Chip>
-                        ))}
-                      </View>
-                      <Text style={styles.insuranceNote}>
-                      This info helps us recover costs if goods are insured.
-                    </Text>
-            
+          <Text style={styles.stepTitle}>Value Range</Text>
+          <View style={styles.qualitiesContainer}>
+            {[
+              { id: 1, label: '30khs-100khs' },
+              { id: 2, label: '110khs-500khs' },
+              { id: 3, label: '510khs-1000khs' },
+              { id: 4, label: '1000khs+' }
+            ].map(range => (
+              <Chip
+                key={range.id}
+                mode="outlined"
+                style={[styles.chip, formData.valueRange === range.id && styles.chipActive]}
+                textStyle={[styles.chipText, formData.valueRange === range.id && styles.chipTextActive]}
+                selected={formData.valueRange === range.id}
+                onPress={() => setFormData(d => ({ ...d, valueRange: range.id }))}
+                selectedColor={Colors.light.primary}
+              >
+                {range.label}
+              </Chip>
+            ))}
+          </View>
+          <Text style={styles.insuranceNote}>
+            This info helps us recover costs if goods are insured.
+          </Text>
         </>;
       case 3:
         return <>
@@ -395,7 +490,6 @@ export default function SMEHomeScreen() {
                 key={vehicle.id}
                 style={[
                   styles.vehicleOption,
-
                   formData.vehicleType === vehicle.id && styles.vehicleOptionActive
                 ]}
                 onPress={() => setFormData(d => ({ ...d, vehicleType: vehicle.id }))}
@@ -406,48 +500,40 @@ export default function SMEHomeScreen() {
                   color={formData.vehicleType === vehicle.id ? Colors.light.primary : Colors.light.text}
                 />
                 <Text style={[
-                    styles.vehicleLabel,
-                    formData.vehicleType === vehicle.id && styles.vehicleLabelActive
-                  ]}>
-                    {vehicle.label}
+                  styles.vehicleLabel,
+                  formData.vehicleType === vehicle.id && styles.vehicleLabelActive
+                ]}>
+                  {vehicle.label}
                 </Text>
               </TouchableOpacity>
-
             ))}
           </View>
-           <Text style={styles.stepTitle}>Add insurance?</Text>
-                  <Checkbox.Item
-                    label="Yes, insure my goods"
-                    status={formData.insurance === true? 'checked' : 'unchecked'}
-                    onPress={() =>     setFormData(d => ({ ...d, insurance: false }))
-                            }                  />
-                  <Checkbox.Item
-                    label="No, do not insure my goods"
-                    status={formData.insurance === false ? 'checked' : 'unchecked'}
-                    onPress={() =>     setFormData(d => ({ ...d, insurance: true }))
-}
-                  />
-                  <Text style={styles.insuranceNote}>
-                    Read terms and conditions for our insurance coverage.
-                  </Text>
-          
-          
-        </>;
-      case 4:
-        return <>
-          <Text style={styles.stepTitle}>Review your order</Text>
-          {/* review card UI */}
+          <Text style={styles.stepTitle}>Add insurance?</Text>
+          <Checkbox.Item
+            label="Yes, insure my goods"
+            status={formData.insurance === true ? 'checked' : 'unchecked'}
+            onPress={() => setFormData(d => ({ ...d, insurance: true }))}
+          />
+          <Checkbox.Item
+            label="No, do not insure my goods"
+            status={formData.insurance === false ? 'checked' : 'unchecked'}
+            onPress={() => setFormData(d => ({ ...d, insurance: false }))}
+          />
+          <Text style={styles.insuranceNote}>
+            Read terms and conditions for our insurance coverage.
+          </Text>
         </>;
     }
   };
 
-
   const isStepValid = () => {
     switch (currentStep) {
       case 1:
-        return formData.destinationLocation.length > 0;
+        return formData.destinationLocation.length > 0 && formData.pickupLocation.length > 0;
       case 2:
-        return formData.packageDescription.length > 0 && formData.packageDescription.length > 0;
+        return formData.packageDescription.length > 0 && formData.packageWeight.length > 0;
+      case 3:
+        return formData.vehicleType.length > 0;
       default:
         return false;
     }
@@ -482,6 +568,134 @@ export default function SMEHomeScreen() {
             </Text>
           </View>
         }
+
+        {/* Loading Modal for Charge Calculation */}
+        <Modal
+          visible={isCalculatingCharges}
+          transparent={true}
+          animationType="fade"
+        >
+          <View style={styles.loadingOverlay}>
+            <View style={styles.loadingContainer}>
+              <LottieView
+                source={{ uri: 'https://lottie.host/66ff6de2-394e-4010-8064-1d884167dbf6/do1Etdp721.json' }}
+                autoPlay
+                loop
+                style={styles.loadingAnimation}
+              />
+              <Text style={styles.loadingText}>Calculating the best delivery price for you...</Text>
+            </View>
+          </View>
+        </Modal>
+
+        {/* Payment Modal */}
+        <Modal
+          visible={showPaymentModal}
+          transparent={true}
+          animationType="slide"
+        >
+          <View style={styles.paymentOverlay}>
+            <View style={styles.paymentContainer}>
+              <Text style={styles.paymentTitle}>Delivery Charges</Text>
+              
+              {deliveryCharges && (
+                <View style={styles.chargesBreakdown}>
+                  <View style={styles.chargeRow}>
+                    <Text style={styles.chargeLabel}>Base Price:</Text>
+                    <Text style={styles.chargeValue}>KSh {deliveryCharges.breakdown.basePrice}</Text>
+                  </View>
+                  <View style={styles.chargeRow}>
+                    <Text style={styles.chargeLabel}>Distance Charge:</Text>
+                    <Text style={styles.chargeValue}>KSh {deliveryCharges.breakdown.distanceCharge}</Text>
+                  </View>
+                  <View style={styles.chargeRow}>
+                    <Text style={styles.chargeLabel}>Weight Charge:</Text>
+                    <Text style={styles.chargeValue}>KSh {deliveryCharges.breakdown.weightCharge}</Text>
+                  </View>
+                  {deliveryCharges.breakdown.insuranceCharge > 0 && (
+                    <View style={styles.chargeRow}>
+                      <Text style={styles.chargeLabel}>Insurance:</Text>
+                      <Text style={styles.chargeValue}>KSh {deliveryCharges.breakdown.insuranceCharge}</Text>
+                    </View>
+                  )}
+                  <View style={styles.chargeRow}>
+                    <Text style={styles.chargeLabel}>Vehicle Premium:</Text>
+                    <Text style={styles.chargeValue}>KSh {deliveryCharges.breakdown.premiumCharge}</Text>
+                  </View>
+                  <View style={[styles.chargeRow, styles.totalRow]}>
+                    <Text style={styles.totalLabel}>Total:</Text>
+                    <Text style={styles.totalValue}>KSh {deliveryCharges.charges}</Text>
+                  </View>
+                </View>
+              )}
+
+              <Text style={styles.paymentMethodTitle}>Payment Method</Text>
+              <View style={styles.paymentMethods}>
+                {[
+                  { id: 'mobile_money', label: 'Mobile Money', icon: 'phone' },
+                  { id: 'card', label: 'Credit/Debit Card', icon: 'credit-card' },
+                  { id: 'bank_transfer', label: 'Bank Transfer', icon: 'bank' }
+                ].map(method => (
+                  <TouchableOpacity
+                    key={method.id}
+                    style={[
+                      styles.paymentMethod,
+                      paymentMethod === method.id && styles.paymentMethodActive
+                    ]}
+                    onPress={() => setPaymentMethod(method.id as any)}
+                  >
+                    <MaterialCommunityIcons
+                      name={method.icon as any}
+                      size={24}
+                      color={paymentMethod === method.id ? Colors.light.primary : Colors.light.placeholder}
+                    />
+                    <Text style={[
+                      styles.paymentMethodText,
+                      paymentMethod === method.id && styles.paymentMethodTextActive
+                    ]}>
+                      {method.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <View style={styles.paymentButtons}>
+                <TouchableOpacity
+                  style={[styles.paymentButton, styles.payNowButton]}
+                  onPress={handlePayNow}
+                  disabled={isProcessingPayment}
+                >
+                  {isProcessingPayment ? (
+                    <ActivityIndicator size="small" color={Colors.light.background} />
+                  ) : (
+                    <>
+                      <CreditCard size={20} color={Colors.light.background} />
+                      <Text style={styles.payNowText}>Pay Now</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+                
+                {deliveryCharges?.delayPayment && (
+                  <TouchableOpacity
+                    style={[styles.paymentButton, styles.payLaterButton]}
+                    onPress={handlePayLater}
+                    disabled={isProcessingPayment}
+                  >
+                    <Calendar size={20} color={Colors.light.primary} />
+                    <Text style={styles.payLaterText}>Pay Later</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              <TouchableOpacity
+                style={styles.closeButton}
+                onPress={() => setShowPaymentModal(false)}
+              >
+                <Text style={styles.closeButtonText}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
 
         {/* Bottom Sheet */}
         <Animated.View
@@ -529,7 +743,7 @@ export default function SMEHomeScreen() {
                 disabled={!isStepValid()}
               >
                 <Text style={styles.continueButtonText}>
-                  {currentStep === 3 ? 'Proceed' : 'Continue'}
+                  {currentStep === 3 ? 'Proceed to Payment' : 'Continue'}
                 </Text>
                 <ArrowRight size={20} color={Colors.light.background} />
               </TouchableOpacity>
@@ -666,7 +880,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   insuranceNote: { fontSize: 12, color: '#555', marginTop: 8 },
-
   textArea: {
     height: 100,
     textAlignVertical: 'top',
@@ -768,5 +981,158 @@ const styles = StyleSheet.create({
   },
   stepDotActive: {
     backgroundColor: Colors.light.primary,
+  },
+  // Loading Modal Styles
+  loadingOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingContainer: {
+    backgroundColor: Colors.light.background,
+    borderRadius: BORDER_RADIUS.lg,
+    padding: SPACING.xl,
+    alignItems: 'center',
+    maxWidth: '80%',
+  },
+  loadingAnimation: {
+    width: 120,
+    height: 120,
+  },
+  loadingText: {
+    fontFamily: FONT.medium,
+    fontSize: FONT_SIZE.md,
+    color: Colors.light.text,
+    textAlign: 'center',
+    marginTop: SPACING.md,
+  },
+  // Payment Modal Styles
+  paymentOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  paymentContainer: {
+    backgroundColor: Colors.light.background,
+    borderRadius: BORDER_RADIUS.lg,
+    padding: SPACING.xl,
+    maxWidth: '90%',
+    maxHeight: '80%',
+  },
+  paymentTitle: {
+    fontFamily: FONT.poppinsBold,
+    fontSize: FONT_SIZE.xl,
+    color: Colors.light.text,
+    textAlign: 'center',
+    marginBottom: SPACING.lg,
+  },
+  chargesBreakdown: {
+    marginBottom: SPACING.lg,
+  },
+  chargeRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: SPACING.xs,
+  },
+  chargeLabel: {
+    fontFamily: FONT.regular,
+    fontSize: FONT_SIZE.md,
+    color: Colors.light.text,
+  },
+  chargeValue: {
+    fontFamily: FONT.medium,
+    fontSize: FONT_SIZE.md,
+    color: Colors.light.text,
+  },
+  totalRow: {
+    borderTopWidth: 1,
+    borderTopColor: Colors.light.border,
+    marginTop: SPACING.sm,
+    paddingTop: SPACING.sm,
+  },
+  totalLabel: {
+    fontFamily: FONT.poppinsBold,
+    fontSize: FONT_SIZE.lg,
+    color: Colors.light.text,
+  },
+  totalValue: {
+    fontFamily: FONT.poppinsBold,
+    fontSize: FONT_SIZE.lg,
+    color: Colors.light.primary,
+  },
+  paymentMethodTitle: {
+    fontFamily: FONT.poppinsBold,
+    fontSize: FONT_SIZE.md,
+    color: Colors.light.text,
+    marginBottom: SPACING.md,
+  },
+  paymentMethods: {
+    marginBottom: SPACING.lg,
+  },
+  paymentMethod: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: SPACING.md,
+    borderRadius: BORDER_RADIUS.md,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+    marginBottom: SPACING.sm,
+  },
+  paymentMethodActive: {
+    borderColor: Colors.light.primary,
+    backgroundColor: `${Colors.light.primary}10`,
+  },
+  paymentMethodText: {
+    fontFamily: FONT.medium,
+    fontSize: FONT_SIZE.md,
+    color: Colors.light.text,
+    marginLeft: SPACING.md,
+  },
+  paymentMethodTextActive: {
+    color: Colors.light.primary,
+  },
+  paymentButtons: {
+    flexDirection: 'row',
+    gap: SPACING.md,
+    marginBottom: SPACING.md,
+  },
+  paymentButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: SPACING.md,
+    borderRadius: BORDER_RADIUS.md,
+    gap: SPACING.sm,
+  },
+  payNowButton: {
+    backgroundColor: Colors.light.primary,
+  },
+  payLaterButton: {
+    backgroundColor: Colors.light.background,
+    borderWidth: 1,
+    borderColor: Colors.light.primary,
+  },
+  payNowText: {
+    fontFamily: FONT.medium,
+    fontSize: FONT_SIZE.md,
+    color: Colors.light.background,
+  },
+  payLaterText: {
+    fontFamily: FONT.medium,
+    fontSize: FONT_SIZE.md,
+    color: Colors.light.primary,
+  },
+  closeButton: {
+    alignItems: 'center',
+    paddingVertical: SPACING.sm,
+  },
+  closeButtonText: {
+    fontFamily: FONT.medium,
+    fontSize: FONT_SIZE.md,
+    color: Colors.light.placeholder,
   },
 });
