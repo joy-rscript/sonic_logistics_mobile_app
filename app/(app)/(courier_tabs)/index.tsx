@@ -25,6 +25,7 @@ import { Badge } from '@/components/ui/Badge';
 import { DeliveryStepper } from '@/components/ui/DeliveryStepper';
 import * as Location from 'expo-location';
 import { useDelivery } from '@/contexts/DeliveryContext';
+import { useNotifications } from '@/contexts/NotificationContext';
 
 const { height: screenHeight, width: screenWidth } = Dimensions.get('window');
 
@@ -66,8 +67,18 @@ export default function CourierHomeScreen() {
     acceptDelivery,
     updateDeliveryTracker,
     completeDelivery,
-    createNewDelivery
+    createNewDelivery,
+    loading: deliveryLoading,
+    error: deliveryError,
+    refreshDeliveries
   } = useDelivery();
+
+  const { 
+    notifications, 
+    unreadCount, 
+    markAsRead,
+    refreshNotifications 
+  } = useNotifications();
 
   const [selectedDelivery, setSelectedDelivery] = useState(
     allDeliveries.length > 0 ? allDeliveries[0] : null
@@ -146,6 +157,10 @@ export default function CourierHomeScreen() {
 
   // Set up location and keyboard listeners
   useEffect(() => {
+    // Refresh data when component mounts
+    refreshDeliveries();
+    refreshNotifications();
+
     const getPermissions = async () => {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status === 'granted') console.log('Permission granted');
@@ -260,28 +275,8 @@ export default function CourierHomeScreen() {
   });
 
   const [notifications, setNotifications] = useState([
-    {
-      id: '1',
-      title: 'New Delivery Request',
-      message: 'You have a new delivery request from TechCorp Solutions.',
-      type: 'delivery',
-      read: false,
-    },
-    {
-      id: '2',
-      title: 'Route Optimization',
-      message: 'Your delivery route has been optimized for better efficiency.',
-      type: 'update',
-      read: false,
-    },
-  ]);
-
   const handleNotificationRead = (id: string) => {
-    setNotifications(prev => 
-      prev.map(notif => 
-        notif.id === id ? {...notif, read: true} : notif
-      )
-    );
+    markAsRead(id);
   };
 
   const handleAcceptDelivery = (requestId: string) => {
@@ -351,21 +346,33 @@ export default function CourierHomeScreen() {
             </View>
             <TouchableOpacity onPress={() => setShowNotifications(prev => !prev)} style={styles.notificationButton}>
               <Bell size={24} color={Colors.light.text} />
-              <View style={styles.notificationBadge} />
+              {unreadCount > 0 && (
+                <View style={styles.notificationBadge}>
+                  <Text style={styles.notificationBadgeText}>{unreadCount}</Text>
+                </View>
+              )}
             </TouchableOpacity>
           </View>
 
           {showNotifications && (
             <View style={styles.notificationsOverlay}>
               <Text style={styles.sectionTitle}>Notifications</Text>
+              {deliveryLoading && (
+                <Text style={styles.loadingText}>Loading notifications...</Text>
+              )}
+              {deliveryError && (
+                <Text style={styles.errorText}>{deliveryError}</Text>
+              )}
               {notifications.map(notification => (
                 <TouchableOpacity 
                   key={notification.id} 
                   style={[styles.notificationCard, notification.read && styles.notificationCardRead]}
                   onPress={() => handleNotificationRead(notification.id)}
                 >
-                  <View style={[styles.notificationIcon, { backgroundColor: notification.type === 'update' ? '#4CAF50' : '#FFC107' }]}>
-                    <Text style={styles.notificationIconText}>{notification.type === 'update' ? 'U' : 'D'}</Text>
+                  <View style={[styles.notificationIcon, { backgroundColor: notification.type === 'system' ? '#4CAF50' : notification.type === 'update' ? '#2196F3' : '#FFC107' }]}>
+                    <Text style={styles.notificationIconText}>
+                      {notification.type === 'system' ? 'S' : notification.type === 'update' ? 'U' : 'D'}
+                    </Text>
                   </View>
                   <View style={styles.notificationContent}>
                     <Text style={styles.notificationTitle}>{notification.title}</Text>
@@ -590,6 +597,7 @@ export default function CourierHomeScreen() {
                 onStepComplete={handleStepComplete}
                 currentStep={currentStep}
                 isCompleted={isDeliveryCompleted}
+                deliveryId={currentDelivery?.id}
               />
             </ScrollView>
           </Animated.View>
@@ -707,10 +715,18 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 10,
     right: 10,
-    height: 8,
-    width: 8,
-    borderRadius: 4,
+    minHeight: 16,
+    minWidth: 16,
+    borderRadius: 8,
     backgroundColor: Colors.light.error,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+  },
+  notificationBadgeText: {
+    color: Colors.light.background,
+    fontSize: 10,
+    fontFamily: FONT.bold,
   },
   notificationsOverlay: {
     marginHorizontal: SPACING.lg,
@@ -774,6 +790,20 @@ const styles = StyleSheet.create({
     width: 8,
     borderRadius: 4,
     backgroundColor: Colors.light.primary,
+  },
+  loadingText: {
+    fontFamily: FONT.regular,
+    fontSize: FONT_SIZE.sm,
+    color: Colors.light.placeholder,
+    textAlign: 'center',
+    marginVertical: SPACING.md,
+  },
+  errorText: {
+    fontFamily: FONT.regular,
+    fontSize: FONT_SIZE.sm,
+    color: Colors.light.error,
+    textAlign: 'center',
+    marginVertical: SPACING.md,
   },
   deliveriesSection: {
     marginBottom: SPACING.xl,

@@ -15,6 +15,9 @@ import {
   Poppins_700Bold
 } from '@expo-google-fonts/poppins';
 import { DeliveryProvider } from '@/contexts/DeliveryContext';
+import { UserProvider } from '@/contexts/UserContext';
+import { NotificationProvider } from '@/contexts/NotificationContext';
+import { ChatProvider } from '@/contexts/ChatContext';
 
 // Prevent splash screen from auto-hiding
 SplashScreen.preventAutoHideAsync();
@@ -72,22 +75,28 @@ export default function RootLayout() {
   }
 
   return (
-    <DeliveryProvider>
-      <Stack screenOptions={{ headerShown: false }}>
-        {!isAuthenticated ? (
-          // Authentication screens
-          <>
-            <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-          </>
-        ) : (
-          // Authenticated app screens
-          <>
-            <Stack.Screen name="(app)" options={{ headerShown: false }} />
-          </>
-        )}
-        <Stack.Screen name="+not-found" options={{ title: 'Oops!' }} />
-      </Stack>
-      <StatusBar style="auto" />
-    </DeliveryProvider>
+    <UserProvider>
+      <NotificationProvider>
+        <ChatProvider>
+          <DeliveryProvider>
+            <Stack screenOptions={{ headerShown: false }}>
+              {!isAuthenticated ? (
+                // Authentication screens
+                <>
+                  <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+                </>
+              ) : (
+                // Authenticated app screens
+                <>
+                  <Stack.Screen name="(app)" options={{ headerShown: false }} />
+                </>
+              )}
+              <Stack.Screen name="+not-found" options={{ title: 'Oops!' }} />
+            </Stack>
+            <StatusBar style="auto" />
+          </DeliveryProvider>
+        </ChatProvider>
+      </NotificationProvider>
+    </UserProvider>
   );
 }

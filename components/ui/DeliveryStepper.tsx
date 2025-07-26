@@ -4,11 +4,13 @@ import { Camera, Check, Upload } from 'lucide-react-native';
 import Colors from '@/constants/Colors';
 import { SPACING, FONT, FONT_SIZE, BORDER_RADIUS } from '@/constants/Theme';
 import { Button } from './Button';
+import { useDelivery } from '@/contexts/DeliveryContext';
 
 interface DeliveryStepperProps {
   onStepComplete: (step: string, data?: any) => void;
   currentStep: number;
   isCompleted: boolean;
+  deliveryId?: string;
 }
 
 interface StepData {
@@ -19,11 +21,12 @@ interface StepData {
   expanded: boolean;
 }
 
-export function DeliveryStepper({ onStepComplete, currentStep, isCompleted }: DeliveryStepperProps) {
+export function DeliveryStepper({ onStepComplete, currentStep, isCompleted, deliveryId }: DeliveryStepperProps) {
   const [smsCode, setSmsCode] = useState('');
   const [pickupImage, setPickupImage] = useState<string | null>(null);
   const [deliveryImage, setDeliveryImage] = useState<string | null>(null);
   const [recipientCode, setRecipientCode] = useState('');
+  const { uploadImage, verifyCode, loading } = useDelivery();
 
   const steps: StepData[] = [
     {
@@ -80,10 +83,37 @@ export function DeliveryStepper({ onStepComplete, currentStep, isCompleted }: De
     
     if (type === 'pickup') {
       setPickupImage(mockImageUri);
-      handleStepAction('pickup_image', { image: mockImageUri });
+      if (deliveryId) {
+        uploadImage(deliveryId, mockImageUri, 'pickup').then(() => {
+          handleStepAction('pickup_image', { image: mockImageUri });
+        });
+      } else {
+        handleStepAction('pickup_image', { image: mockImageUri });
+      }
     } else {
       setDeliveryImage(mockImageUri);
-      handleStepAction('delivery_image', { image: mockImageUri });
+      if (deliveryId) {
+        uploadImage(deliveryId, mockImageUri, 'dropoff').then(() => {
+          handleStepAction('delivery_image', { image: mockImageUri });
+        });
+      } else {
+        handleStepAction('delivery_image', { image: mockImageUri });
+      }
+    }
+  };
+
+  const handleCodeVerification = async (code: string, type: 'pickup' | 'dropoff', stepId: string) => {
+    if (!deliveryId) {
+      handleStepAction(stepId, { code });
+      return;
+    }
+
+    const isValid = await verifyCode(deliveryId, code, type);
+    if (isValid) {
+      handleStepAction(stepId, { code });
+    } else {
+      // Handle invalid code - you might want to show an error message
+      console.error('Invalid verification code');
     }
   };
 
@@ -161,16 +191,16 @@ export function DeliveryStepper({ onStepComplete, currentStep, isCompleted }: De
                           maxLength={6}
                         />
                         <TouchableOpacity 
-                          style={[styles.submitButton, !smsCode && styles.submitButtonDisabled]}
+                          style={[styles.submitButton, (!smsCode || loading) && styles.submitButtonDisabled]}
                           onPress={() => {
                             if (smsCode) {
-                              handleStepAction('sms_code', { code: smsCode });
+                              handleCodeVerification(smsCode, 'pickup', 'sms_code');
                             }
                           }}
-                          disabled={!smsCode}
+                          disabled={!smsCode || loading}
                         >
-                          <Text style={[styles.submitButtonText, !smsCode && styles.submitButtonTextDisabled]}>
-                            Submit
+                          <Text style={[styles.submitButtonText, (!smsCode || loading) && styles.submitButtonTextDisabled]}>
+                            {loading ? 'Verifying...' : 'Submit'}
                           </Text>
                         </TouchableOpacity>
                       </View>
@@ -221,16 +251,16 @@ export function DeliveryStepper({ onStepComplete, currentStep, isCompleted }: De
                           maxLength={6}
                         />
                         <TouchableOpacity 
-                          style={[styles.submitButton, !recipientCode && styles.submitButtonDisabled]}
+                          style={[styles.submitButton, (!recipientCode || loading) && styles.submitButtonDisabled]}
                           onPress={() => {
                             if (recipientCode) {
-                              handleStepAction('recipient_code', { code: recipientCode });
+                              handleCodeVerification(recipientCode, 'dropoff', 'recipient_code');
                             }
                           }}
-                          disabled={!recipientCode}
+                          disabled={!recipientCode || loading}
                         >
-                          <Text style={[styles.submitButtonText, !recipientCode && styles.submitButtonTextDisabled]}>
-                            Submit
+                          <Text style={[styles.submitButtonText, (!recipientCode || loading) && styles.submitButtonTextDisabled]}>
+                            {loading ? 'Verifying...' : 'Submit'}
                           </Text>
                         </TouchableOpacity>
                       </View>

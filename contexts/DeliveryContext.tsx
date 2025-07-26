@@ -1,6 +1,17 @@
 import React, { createContext, useContext, useState, ReactNode } from 'react';
+import { 
+  fetchAvailableDeliveries, 
+  fetchCourierDeliveries, 
+  fetchSMEDeliveries,
+  acceptDeliveryRequest,
+  updateDeliveryStatus,
+  createDeliveryRequest,
+  uploadDeliveryImage,
+  verifyDeliveryCode,
+  DeliveryRequest as APIDeliveryRequest
+} from '@/utils/deliveryApi';
 
-interface DeliveryTracker {
+export interface DeliveryTracker {
   pickup: 'pending' | 'in_progress' | 'completed';
   pickupCode: string | null;
   pickupImage: string | null;
@@ -9,14 +20,14 @@ interface DeliveryTracker {
   dropoffImage: string | null;
 }
 
-interface Coordinates {
+export interface Coordinates {
   latitude: number;
   longitude: number;
   latitudeDelta: number;
   longitudeDelta: number;
 }
 
-interface DeliveryRequest {
+export interface DeliveryRequest {
   id: string;
   location: string;
   price: number;
@@ -49,6 +60,8 @@ interface DeliveryContextType {
   pendingOngoingDeliveries: DeliveryRequest[];
   currentDelivery: DeliveryRequest | null;
   smeDeliveries: DeliveryRequest[];
+  loading: boolean;
+  error: string | null;
   acceptDelivery: (deliveryId: string) => void;
   setCurrentDelivery: (delivery: DeliveryRequest | null) => void;
   updateDeliveryTracker: (deliveryId: string, tracker: Partial<DeliveryTracker>) => void;
@@ -56,6 +69,9 @@ interface DeliveryContextType {
   createNewDelivery: (delivery: Partial<DeliveryRequest>) => void;
   updateDriverLocation: (deliveryId: string, location: Coordinates) => void;
   getDeliveryById: (id: string) => DeliveryRequest | null;
+  refreshDeliveries: () => Promise<void>;
+  uploadImage: (deliveryId: string, imageUri: string, type: 'pickup' | 'dropoff') => Promise<void>;
+  verifyCode: (deliveryId: string, code: string, type: 'pickup' | 'dropoff') => Promise<boolean>;
 }
 
 const DeliveryContext = createContext<DeliveryContextType | undefined>(undefined);
@@ -253,8 +269,112 @@ export function DeliveryProvider({ children }: { children: ReactNode }) {
   const [currentDelivery, setCurrentDeliveryState] = useState<DeliveryRequest | null>(
     mockAcceptedDeliveries.find(d => d.tracker?.pickup === 'completed') || null
   );
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const acceptDelivery = (deliveryId: string) => {
+  // Refresh deliveries from API
+  const refreshDeliveries = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [available, courier, sme] = await Promise.all([
+        fetchAvailableDeliveries(),
+        fetchCourierDeliveries('courier1'), // Replace with actual courier ID
+        fetchSMEDeliveries('sme1'), // Replace with actual SME ID
+      ]);
+      
+      setAllDeliveries(available);
+      setPendingOngoingDeliveries(courier);
+      setSmeDeliveries(sme);
+    } catch (err) {
+      setError('Failed to refresh deliveries');
+      console.error('Error refreshing deliveries:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const acceptDelivery = async (deliveryId: string) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const acceptedDelivery = await acceptDeliveryRequest(deliveryId, 'courier1'); // Replace with actual courier ID
+      
+      // Remove from all deliveries and add to pending ongoing
+      setAllDeliveries(prev => prev.filter(d => d.id !== deliveryId));
+      setPendingOngoingDeliveries(prev => [...prev, acceptedDelivery]);
+      
+      // Update SME deliveries if this delivery belongs to an SME
+      setSmeDeliveries(prev => 
+        prev.map(d => 
+          d.id === deliveryId 
+            ? { ...d, status: 'accepted', driverId: acceptedDelivery.driverId, driverName: acceptedDelivery.driverName, acceptedAt: new Date() }
+            : d
+        )
+      );
+
+      // Set as current delivery if none exists
+      if (!currentDelivery) {
+        setCurrentDeliveryState(acceptedDelivery);
+      }
+    } catch (err) {
+      setError('Failed to accept delivery');
+      console.error('Error accepting delivery:', err);
+      
+      // Fallback to original logic if API fails
+      const delivery = allDeliveries.find(d => d.id === deliveryId);
+      if (!delivery) return;
+
+      // Assign random driver
+      const randomDriver = mockDrivers[Math.floor(Math.random() * mockDrivers.length)];
+
+      // Create ongoing delivery with tracker
+      const ongoingDelivery: DeliveryRequest = {
+        ...delivery,
+        status: 'accepted',
+        acceptedAt: new Date(),
+        driverId: randomDriver.id,
+        driverName: randomDriver.name,
+        driverLocation: {
+          latitude: delivery.pickupCord.latitude + (Math.random() - 0.5) * 0.01,
+          longitude: delivery.pickupCord.longitude + (Math.random() - 0.5) * 0.01,
+          latitudeDelta: 0.0422,
+          longitudeDelta: 0.0421,
+        },
+        tracker: {
+          pickup: 'pending',
+          pickupCode: null,
+          pickupImage: null,
+          dropoff: 'pending',
+          dropoffCode: null,
+          dropoffImage: null,
+        }
+      };
+
+      // Remove from all deliveries and add to pending ongoing
+      setAllDeliveries(prev => prev.filter(d => d.id !== deliveryId));
+      setPendingOngoingDeliveries(prev => [...prev, ongoingDelivery]);
+      
+      // Update SME deliveries if this delivery belongs to an SME
+      setSmeDeliveries(prev => 
+        prev.map(d => 
+          d.id === deliveryId 
+            ? { ...d, status: 'accepted', driverId: randomDriver.id, driverName: randomDriver.name, acceptedAt: new Date() }
+            : d
+        )
+      );
+
+      // Set as current delivery if none exists
+      if (!currentDelivery) {
+        setCurrentDeliveryState(ongoingDelivery);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Original acceptDelivery logic moved to fallback above
+  const acceptDeliveryFallback = (deliveryId: string) => {
     const delivery = allDeliveries.find(d => d.id === deliveryId);
     if (!delivery) return;
 
@@ -307,7 +427,18 @@ export function DeliveryProvider({ children }: { children: ReactNode }) {
     setCurrentDeliveryState(delivery);
   };
 
-  const updateDeliveryTracker = (deliveryId: string, trackerUpdate: Partial<DeliveryTracker>) => {
+  const updateDeliveryTracker = async (deliveryId: string, trackerUpdate: Partial<DeliveryTracker>) => {
+    setLoading(true);
+    setError(null);
+    try {
+      await updateDeliveryStatus(deliveryId, { tracker: trackerUpdate });
+    } catch (err) {
+      setError('Failed to update delivery tracker');
+      console.error('Error updating delivery tracker:', err);
+    } finally {
+      setLoading(false);
+    }
+
     // Update pending ongoing deliveries
     setPendingOngoingDeliveries(prev => 
       prev.map(delivery => 
@@ -349,7 +480,28 @@ export function DeliveryProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const createNewDelivery = (deliveryData: Partial<DeliveryRequest>) => {
+  const createNewDelivery = async (deliveryData: Partial<DeliveryRequest>) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const newDelivery = await createDeliveryRequest(deliveryData);
+      
+      // Add to both SME deliveries and available deliveries
+      setSmeDeliveries(prev => [...prev, newDelivery]);
+      setAllDeliveries(prev => [...prev, newDelivery]);
+    } catch (err) {
+      setError('Failed to create delivery');
+      console.error('Error creating delivery:', err);
+      
+      // Fallback to original logic
+      createNewDeliveryFallback(deliveryData);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Original createNewDelivery logic moved to fallback
+  const createNewDeliveryFallback = (deliveryData: Partial<DeliveryRequest>) => {
     const newDelivery: DeliveryRequest = {
       id: `sme-${Date.now()}`,
       location: deliveryData.destination || 'Unknown',
@@ -383,7 +535,13 @@ export function DeliveryProvider({ children }: { children: ReactNode }) {
     setAllDeliveries(prev => [...prev, newDelivery]);
   };
 
-  const updateDriverLocation = (deliveryId: string, location: Coordinates) => {
+  const updateDriverLocation = async (deliveryId: string, location: Coordinates) => {
+    try {
+      await updateDeliveryStatus(deliveryId, { driverLocation: location });
+    } catch (err) {
+      console.warn('Failed to update driver location via API, updating locally:', err);
+    }
+
     const updateLocation = (delivery: DeliveryRequest) => 
       delivery.id === deliveryId ? { ...delivery, driverLocation: location } : delivery;
 
@@ -392,6 +550,51 @@ export function DeliveryProvider({ children }: { children: ReactNode }) {
     
     if (currentDelivery?.id === deliveryId) {
       setCurrentDeliveryState(prev => prev ? { ...prev, driverLocation: location } : null);
+    }
+  };
+
+  const uploadImage = async (deliveryId: string, imageUri: string, type: 'pickup' | 'dropoff') => {
+    setLoading(true);
+    setError(null);
+    try {
+      const imageUrl = await uploadDeliveryImage(deliveryId, imageUri, type);
+      
+      // Update the delivery tracker with the image URL
+      const trackerUpdate = type === 'pickup' 
+        ? { pickupImage: imageUrl }
+        : { dropoffImage: imageUrl };
+      
+      await updateDeliveryTracker(deliveryId, trackerUpdate);
+    } catch (err) {
+      setError('Failed to upload image');
+      console.error('Error uploading image:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const verifyCode = async (deliveryId: string, code: string, type: 'pickup' | 'dropoff'): Promise<boolean> => {
+    setLoading(true);
+    setError(null);
+    try {
+      const isValid = await verifyDeliveryCode(deliveryId, code, type);
+      
+      if (isValid) {
+        // Update the delivery tracker with the code
+        const trackerUpdate = type === 'pickup' 
+          ? { pickupCode: code }
+          : { dropoffCode: code };
+        
+        await updateDeliveryTracker(deliveryId, trackerUpdate);
+      }
+      
+      return isValid;
+    } catch (err) {
+      setError('Failed to verify code');
+      console.error('Error verifying code:', err);
+      return false;
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -405,6 +608,8 @@ export function DeliveryProvider({ children }: { children: ReactNode }) {
       pendingOngoingDeliveries,
       currentDelivery,
       smeDeliveries,
+      loading,
+      error,
       acceptDelivery,
       setCurrentDelivery,
       updateDeliveryTracker,
@@ -412,6 +617,9 @@ export function DeliveryProvider({ children }: { children: ReactNode }) {
       createNewDelivery,
       updateDriverLocation,
       getDeliveryById,
+      refreshDeliveries,
+      uploadImage,
+      verifyCode,
     }}>
       {children}
     </DeliveryContext.Provider>
