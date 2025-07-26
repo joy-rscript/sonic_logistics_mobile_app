@@ -152,8 +152,7 @@ export default function CourierHomeScreen() {
     } else {
       snapToPosition(SNAP_POINTS.COLLAPSED);
     }
-  }, [currentStep, currentDelivery]
-);
+  }, [currentStep, currentDelivery]);
 
   // Set up location and keyboard listeners
   useEffect(() => {
@@ -274,7 +273,6 @@ export default function CourierHomeScreen() {
     },
   });
 
-  const [notifications, setNotifications] = useState([
   const handleNotificationRead = (id: string) => {
     markAsRead(id);
   };
@@ -430,7 +428,6 @@ export default function CourierHomeScreen() {
 
                       <View style={styles.estimateRow}>
                         <Clock size={16} color={Colors.light.placeholder} />
-                        //would need to compute distance using google maps i guess
                         <Text style={styles.estimateText}>{item.estimate.split('|')[1]?.trim() || '2hrs'}</Text>
                       </View>
                     </Card>
