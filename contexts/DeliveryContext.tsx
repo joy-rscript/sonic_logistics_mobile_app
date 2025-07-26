@@ -358,20 +358,20 @@ export function DeliveryProvider({ children }: { children: ReactNode }) {
       clientType: 'Technology Company',
       premium: deliveryData.selectedQualities?.includes('Premium') || false,
       badges: deliveryData.selectedQualities || ['Standard'],
-      pickup: 'TechCorp Building, Nairobi CBD', // This would come from user profile
-      dropoff: deliveryData.destination || '',
+      pickup: deliveryData.pickup || 'TechCorp Building, Nairobi CBD',
+      dropoff: deliveryData.dropoff || deliveryData.destination || 'Unknown destination',
       estimate: '5km | 30min', // This would be calculated
       instructions: deliveryData.instructions,
-      pickupCord: {
+      pickupCord: deliveryData.pickupCord || {
         latitude: -1.2921,
         longitude: 36.8219,
         latitudeDelta: 0.0422,
         longitudeDelta: 0.0421,
       },
-      dropoffCord: {
-        latitude: -1.2921 + (Math.random() - 0.5) * 0.1,
-        longitude: 36.8219 + (Math.random() - 0.5) * 0.1,
-        latitudeDelta: 0.0440,
+      dropoffCord: deliveryData.dropoffCord || {
+        latitude: -1.2921,
+        longitude: 36.8219,
+        latitudeDelta: 0.0422,
         longitudeDelta: 0.0421,
       },
       status: 'pending',
