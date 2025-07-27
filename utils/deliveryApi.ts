@@ -356,7 +356,7 @@ export const computeDeliveryCharges = async (input: {
     
     return {
       charges: Math.round(totalCharges),
-      delayPayment: totalCharges > 100, // Allow delay payment for orders > 100
+      delayPayment: totalCharges > 50, // Allow delay payment for orders > 50
       breakdown: {
         basePrice,
         distanceCharge: Math.round(distanceCharge),
