@@ -10,7 +10,7 @@ import {
   Alert,
   SafeAreaView,
 } from 'react-native';
-import { ArrowLeft, CreditCard, Smartphone, Building, CheckCircle, XCircle } from 'lucide-react-native';
+import { ArrowLeft, CreditCard, Smartphone, Building, CircleCheck as CheckCircle, Circle as XCircle } from 'lucide-react-native';
 import LottieView from 'lottie-react-native';
 import Colors from '@/constants/Colors';
 import { SPACING, FONT, FONT_SIZE, BORDER_RADIUS, SHADOWS } from '@/constants/Theme';
