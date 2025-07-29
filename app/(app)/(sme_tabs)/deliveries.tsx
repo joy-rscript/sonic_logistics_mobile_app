@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { StyleSheet, Text, View, SafeAreaView, ScrollView, TouchableOpacity } from 'react-native';
+import { StyleSheet, Text, View, SafeAreaView, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import { Search, Filter, MapPin, User, Clock } from 'lucide-react-native';
 import { router } from 'expo-router';
 import Colors from '@/constants/Colors';
@@ -7,9 +7,13 @@ import { SPACING, FONT, FONT_SIZE, BORDER_RADIUS } from '@/constants/Theme';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { useDelivery } from '@/contexts/DeliveryContext';
+import { PaymentModal } from '@/components/ui/PaymentModal';
+import FlashMessage, { showMessage } from 'react-native-flash-message';
 
 export default function SMEDeliveriesScreen() {
   const [activeTab, setActiveTab] = useState<'all' | 'pending' | 'accepted' | 'completed'>('all');
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [selectedDeliveryForPayment, setSelectedDeliveryForPayment] = useState<any>(null);
   const { smeDeliveries } = useDelivery();
 
   const getStatusColor = (status: string) => {
@@ -46,6 +50,40 @@ export default function SMEDeliveriesScreen() {
     }
   };
 
+  const handleResolvePayment = (delivery: any) => {
+    setSelectedDeliveryForPayment(delivery);
+    setShowPaymentModal(true);
+  };
+
+  const handlePaymentSuccess = (transactionId: string) => {
+    showMessage({
+      message: "Payment Successful!",
+      description: "Your delivery is now available for couriers.",
+      type: "success",
+      duration: 3000,
+    });
+    setSelectedDeliveryForPayment(null);
+  };
+
+  const handlePaymentCancel = () => {
+    showMessage({
+      message: "Payment cancelled",
+      description: "You can retry payment anytime.",
+      type: "warning",
+      duration: 3000,
+    });
+    setSelectedDeliveryForPayment(null);
+  };
+
+  const handlePaymentFailure = (error: string) => {
+    showMessage({
+      message: "Payment Failed",
+      description: error,
+      type: "danger",
+      duration: 4000,
+    });
+    setSelectedDeliveryForPayment(null);
+  };
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
@@ -83,10 +121,19 @@ export default function SMEDeliveriesScreen() {
             <Card style={styles.shipmentCard}>
               <View style={styles.shipmentHeader}>
                 <Text style={styles.trackingNumber}>#{shipment.id.slice(-6).toUpperCase()}</Text>
-                <Badge 
-                  label={getStatusLabel(shipment.status)} 
-                  variant={getStatusColor(shipment.status) as any}
-                />
+                <View style={styles.badgeContainer}>
+                  {shipment.payment === 'pending' && (
+                    <Badge 
+                      label="Pending Payment" 
+                      variant="warning"
+                      style={styles.paymentBadge}
+                    />
+                  )}
+                  <Badge 
+                    label={getStatusLabel(shipment.status)} 
+                    variant={getStatusColor(shipment.status) as any}
+                  />
+                </View>
               </View>
               
               <View style={styles.packageInfo}>
@@ -111,6 +158,20 @@ export default function SMEDeliveriesScreen() {
                   <Text style={styles.driverText}>Driver: {shipment.CourierDetails.CourierName}</Text>
                   <TouchableOpacity style={styles.trackButton}>
                     <Text style={styles.trackButtonText}>Track Live</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+              
+              {shipment.payment === 'pending' && (
+                <View style={styles.pendingPaymentSection}>
+                  <Text style={styles.pendingPaymentText}>
+                    Payment is required to make this delivery available to couriers.
+                  </Text>
+                  <TouchableOpacity 
+                    style={styles.resolvePaymentButton}
+                    onPress={() => handleResolvePayment(shipment)}
+                  >
+                    <Text style={styles.resolvePaymentButtonText}>Resolve Payment</Text>
                   </TouchableOpacity>
                 </View>
               )}
@@ -143,6 +204,18 @@ export default function SMEDeliveriesScreen() {
           </View>
         )}
       </ScrollView>
+      
+      {/* Payment Modal */}
+      <PaymentModal
+        visible={showPaymentModal}
+        onClose={() => setShowPaymentModal(false)}
+        deliveryData={selectedDeliveryForPayment}
+        onPaymentSuccess={handlePaymentSuccess}
+        onPaymentCancel={handlePaymentCancel}
+        onPaymentFailure={handlePaymentFailure}
+      />
+      
+      <FlashMessage position="top" />
     </SafeAreaView>
   );
 }
@@ -214,6 +287,14 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZE.md,
     color: Colors.light.text,
   },
+  badgeContainer: {
+    flexDirection: 'row',
+    gap: SPACING.xs,
+    alignItems: 'center',
+  },
+  paymentBadge: {
+    backgroundColor: `${Colors.light.warning}20`,
+  },
   packageInfo: {
     marginBottom: SPACING.sm,
   },
@@ -265,6 +346,31 @@ const styles = StyleSheet.create({
   trackButtonText: {
     fontFamily: FONT.medium,
     fontSize: FONT_SIZE.xs,
+    color: Colors.light.background,
+  },
+  pendingPaymentSection: {
+    backgroundColor: `${Colors.light.warning}10`,
+    padding: SPACING.md,
+    borderRadius: BORDER_RADIUS.sm,
+    marginBottom: SPACING.sm,
+  },
+  pendingPaymentText: {
+    fontFamily: FONT.regular,
+    fontSize: FONT_SIZE.sm,
+    color: Colors.light.text,
+    marginBottom: SPACING.sm,
+    fontStyle: 'italic',
+  },
+  resolvePaymentButton: {
+    backgroundColor: Colors.light.warning,
+    paddingHorizontal: SPACING.md,
+    paddingVertical: SPACING.sm,
+    borderRadius: BORDER_RADIUS.sm,
+    alignSelf: 'flex-start',
+  },
+  resolvePaymentButtonText: {
+    fontFamily: FONT.medium,
+    fontSize: FONT_SIZE.sm,
     color: Colors.light.background,
   },
   shipmentFooter: {

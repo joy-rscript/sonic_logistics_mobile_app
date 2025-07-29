@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { 
   StyleSheet, Text, View, SafeAreaView, TextInput, TouchableOpacity, ScrollView, 
   Dimensions, PanResponder, Animated, Platform, Keyboard, KeyboardAvoidingView,
-  TouchableWithoutFeedback
+  TouchableWithoutFeedback, Alert
 } from 'react-native';
 import { Chip, Checkbox } from 'react-native-paper';
 import MapView, { Marker } from 'react-native-maps';
@@ -13,6 +13,8 @@ import { SPACING, FONT, FONT_SIZE, BORDER_RADIUS, SHADOWS } from '@/constants/Th
 import * as Location from 'expo-location';
 import { useDelivery } from '@/contexts/DeliveryContext';
 import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
+import { PaymentModal } from '@/components/ui/PaymentModal';
+import FlashMessage, { showMessage } from 'react-native-flash-message';
 
 const { height: screenHeight, width: screenWidth } = Dimensions.get('window');
 
@@ -55,6 +57,8 @@ export default function SMEHomeScreen() {
   const [currentStep, setCurrentStep] = useState(1);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [bottomSheetHeight, setBottomSheetHeight] = useState(SNAP_POINTS.COLLAPSED);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [createdDeliveryData, setCreatedDeliveryData] = useState<any>(null);
 
   // Form field state
   const [formData, setFormData] = useState<DeliveryForm>({
@@ -74,12 +78,14 @@ export default function SMEHomeScreen() {
   const scrollViewRef = useRef<ScrollView>(null);
   const { createNewDelivery } = useDelivery();
 
-  // Auto-snap based on current step
+  // Auto-snap based on current step with enhanced logic
   useEffect(() => {
-    if (currentStep >= 3) {
+    if (currentStep >= 5) {
       snapToPosition(SNAP_POINTS.FULL);
-    } else if (currentStep >= 2) {
+    } else if (currentStep >= 3) {
       snapToPosition(SNAP_POINTS.EXPANDED);
+    } else if (currentStep >= 2) {
+      snapToPosition(SNAP_POINTS.PARTIAL);
     } else if (currentStep >= 1 && expanded) {
       snapToPosition(SNAP_POINTS.PARTIAL);
     } else {
@@ -117,11 +123,13 @@ export default function SMEHomeScreen() {
       'keyboardDidShow',
       () => {
         setKeyboardVisible(true);
-        // Expand the bottom sheet when keyboard appears
-        if (currentStep >= 2) {
+        // Auto-expand based on current step when keyboard appears
+        if (currentStep >= 3) {
           snapToPosition(SNAP_POINTS.FULL);
-        } else {
+        } else if (currentStep >= 2) {
           snapToPosition(SNAP_POINTS.EXPANDED);
+        } else {
+          snapToPosition(SNAP_POINTS.PARTIAL);
         }
       }
     );
@@ -131,10 +139,12 @@ export default function SMEHomeScreen() {
       () => {
         setKeyboardVisible(false);
         // Return to appropriate position when keyboard hides
-        if (currentStep >= 3) {
+        if (currentStep >= 5) {
           snapToPosition(SNAP_POINTS.FULL);
-        } else if (currentStep >= 2) {
+        } else if (currentStep >= 3) {
           snapToPosition(SNAP_POINTS.EXPANDED);
+        } else if (currentStep >= 2) {
+          snapToPosition(SNAP_POINTS.PARTIAL);
         } else if (currentStep >= 1) {
           snapToPosition(SNAP_POINTS.PARTIAL);
         }
@@ -188,7 +198,7 @@ export default function SMEHomeScreen() {
       if (gestureState.vy > 0.5) {
         targetSnapPoint = SNAP_POINTS.COLLAPSED;
       } else if (gestureState.vy < -0.5) {
-        targetSnapPoint = currentStep >= 2 ? SNAP_POINTS.FULL : SNAP_POINTS.EXPANDED;
+        targetSnapPoint = currentStep >= 3 ? SNAP_POINTS.FULL : SNAP_POINTS.EXPANDED;
       } else if (currentHeight < (SNAP_POINTS.COLLAPSED + SNAP_POINTS.PARTIAL) / 2) {
         targetSnapPoint = SNAP_POINTS.COLLAPSED;
       } else if (currentHeight < (SNAP_POINTS.PARTIAL + SNAP_POINTS.EXPANDED) / 2) {
@@ -269,24 +279,72 @@ export default function SMEHomeScreen() {
         dropoffLocation: formData.destinationLocation,
         estimate: '0',
         status: 'pending',
+        payment: 'pending', // Initial payment status
       };
 
       const createdDelivery = await createNewDelivery(deliveryData);
+      setCreatedDeliveryData({ ...deliveryData, id: createdDelivery.id });
 
-      // Navigate to payment screen with delivery data
-      router.push({
-        pathname: '/(app)/(sme_tabs)/payment',
-        params: { 
-          deliveryId: createdDelivery.id,
-          deliveryData: JSON.stringify(deliveryData)
-        }
-      });
+      // Dismiss bottom sheet and show payment modal
+      snapToPosition(SNAP_POINTS.COLLAPSED);
+      setExpanded(false);
+      setCurrentStep(1);
+      setShowPaymentModal(true);
 
     } catch (error) {
       console.error('Error in payment flow:', error);
+      Alert.alert('Error', 'Failed to create delivery request. Please try again.');
     }
   };
 
+  const handlePaymentSuccess = (transactionId: string) => {
+    // Update delivery status to completed payment
+    showMessage({
+      message: "Payment Successful!",
+      description: "Your delivery request is now available for couriers.",
+      type: "success",
+      duration: 3000,
+    });
+    
+    // Reset form
+    setFormData({
+      pickupLocation: '', 
+      destinationLocation: '',
+      packageDescription: '', 
+      packageWeight: '',
+      courierCapacity: '', 
+      itemValue: '',
+      valueRange: 0,
+      vehicleType: '',
+      qualities: [],
+      weightType: '',
+      insurance: false
+    });
+    
+    // Navigate to deliveries tab
+    setTimeout(() => {
+      router.push('/(app)/(sme_tabs)/deliveries');
+    }, 1000);
+  };
+
+  const handlePaymentCancel = () => {
+    // Payment was cancelled, delivery remains with pending payment
+    showMessage({
+      message: "Payment cancelled",
+      description: "You can retry from the Deliveries tab.",
+      type: "warning",
+      duration: 4000,
+    });
+  };
+
+  const handlePaymentFailure = (error: string) => {
+    showMessage({
+      message: "Payment Failed",
+      description: error,
+      type: "danger",
+      duration: 4000,
+    });
+  };
   const updateFormData = (key: keyof DeliveryForm, value: any) => {
     setFormData(prev => ({
       ...prev,
@@ -361,13 +419,15 @@ export default function SMEHomeScreen() {
                   </Text>
                 </TouchableOpacity>
               </View>
-              <TextInput
+              <View style={styles.inputContainer}>
+                <TextInput
                 placeholder={formData.weightType === 'weight' ? "Enter weight in kg" : "Enter quantity (e.g. 3)"}
                 style={styles.input}
                 keyboardType="numeric"
                 value={formData.packageWeight}
                 onChangeText={t => setFormData(d => ({ ...d, packageWeight: t }))}
-              />
+                />
+              </View>
             </View>
             
             <View style={styles.qualitiesSection}>
@@ -591,6 +651,18 @@ export default function SMEHomeScreen() {
           </ScrollView>
         </Animated.View>
       </KeyboardAvoidingView>
+      
+      {/* Payment Modal */}
+      <PaymentModal
+        visible={showPaymentModal}
+        onClose={() => setShowPaymentModal(false)}
+        deliveryData={createdDeliveryData}
+        onPaymentSuccess={handlePaymentSuccess}
+        onPaymentCancel={handlePaymentCancel}
+        onPaymentFailure={handlePaymentFailure}
+      />
+      
+      <FlashMessage position="top" />
     </TouchableWithoutFeedback>
   );
 }
@@ -655,22 +727,20 @@ const styles = StyleSheet.create({
     borderRadius: BORDER_RADIUS.md,
     borderWidth: 1,
     borderColor: Colors.light.border,
-    paddingHorizontal: SPACING.md,
+    paddingHorizontal: SPACING.lg,
     paddingVertical: SPACING.md,
     minHeight: 48,
   },
   inputContainer: { 
-    flexDirection: 'row',
-    alignItems: 'center', 
     marginBottom: SPACING.md,
-    paddingHorizontal: SPACING.sm,
+    paddingHorizontal: SPACING.lg,
   },
   inputIcon: { 
     marginRight: SPACING.sm,
   },
   weightSection: {
     marginTop: SPACING.md,
-    paddingHorizontal: SPACING.sm,
+    paddingHorizontal: SPACING.lg,
   },
   weightTypeContainer: {
     flexDirection: 'row',
@@ -699,22 +769,22 @@ const styles = StyleSheet.create({
   },
   qualitiesSection: {
     marginTop: SPACING.lg,
-    paddingHorizontal: SPACING.sm,
+    paddingHorizontal: SPACING.lg,
   },
   qualitiesContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: SPACING.sm,
+    gap: SPACING.md,
     marginBottom: SPACING.sm,
   },
   valueRangeSection: {
     marginTop: SPACING.lg,
-    paddingHorizontal: SPACING.sm,
+    paddingHorizontal: SPACING.lg,
   },
   valueRangeContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: SPACING.sm,
+    gap: SPACING.md,
     marginBottom: SPACING.sm,
   },
   valueRangeOption: {
@@ -724,7 +794,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.light.border,
     backgroundColor: Colors.light.card,
-    minWidth: '45%',
+    minWidth: '47%',
     alignItems: 'center',
   },
   valueRangeOptionActive: {
@@ -742,19 +812,19 @@ const styles = StyleSheet.create({
   capacityContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: SPACING.md,
-    paddingHorizontal: SPACING.sm,
+    gap: SPACING.lg,
+    paddingHorizontal: SPACING.lg,
     marginBottom: SPACING.lg,
   },
   vehicleOption: {
-    width: '45%',
+    width: '47%',
     backgroundColor: Colors.light.background,
     borderRadius: BORDER_RADIUS.md,
     padding: SPACING.lg,
     alignItems: 'center',
     borderWidth: 1,
     borderColor: Colors.light.border,
-    minHeight: 80,
+    minHeight: 90,
     justifyContent: 'center',
   },
   vehicleOptionActive: {
@@ -773,10 +843,10 @@ const styles = StyleSheet.create({
   },
   insuranceSection: {
     marginTop: SPACING.md,
-    paddingHorizontal: SPACING.sm,
+    paddingHorizontal: SPACING.lg,
   },
   insuranceOptions: {
-    gap: SPACING.sm,
+    gap: SPACING.md,
     marginBottom: SPACING.sm,
   },
   insuranceOption: {
@@ -806,7 +876,8 @@ const styles = StyleSheet.create({
     color: Colors.light.placeholder,
     fontStyle: 'italic',
     lineHeight: 16,
-    paddingHorizontal: SPACING.xs,
+    paddingHorizontal: SPACING.sm,
+    marginTop: SPACING.xs,
   },
   chip: {
     backgroundColor: Colors.light.card,
@@ -830,7 +901,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     paddingVertical: SPACING.lg,
     gap: SPACING.md,
-    paddingHorizontal: SPACING.sm,
+    paddingHorizontal: SPACING.lg,
   },
   backButton: {
     flex: 1,
