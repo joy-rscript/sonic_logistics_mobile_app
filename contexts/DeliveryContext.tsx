@@ -52,6 +52,7 @@ interface DeliveryContextType {
   refreshDeliveries: () => Promise<void>;
   uploadImage: (deliveryId: string, imageUri: string, type: 'pickup' | 'dropoff') => Promise<void>;
   verifyCode: (deliveryId: string, code: string, type: 'pickup' | 'dropoff') => Promise<boolean>;
+  updatePaymentStatus: (deliveryId: string, status: 'pending' | 'completed' | 'failed') => void;
 }
 
 const DeliveryContext = createContext<DeliveryContextType | undefined>(undefined);
@@ -101,6 +102,7 @@ const allAvailableDeliveries: DeliveryRequest[] = [
       longitudeDelta: 0.0421,
     },
     status: 'pending',
+    payment: 'completed',
   },
   {
     id: 'd2',
@@ -138,6 +140,7 @@ const allAvailableDeliveries: DeliveryRequest[] = [
       longitudeDelta: 0.0421,
     },
     status: 'pending',
+    payment: 'completed',
   },
 ];
 
@@ -179,6 +182,7 @@ const mockAcceptedDeliveries: DeliveryRequest[] = [
       longitudeDelta: 0.0421,
     },
     status: 'accepted',
+    payment: 'completed',
     acceptedAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
     CourierDetails: {
       CourierId: 'driver1',
@@ -240,6 +244,7 @@ const mockSMEDeliveries: DeliveryRequest[] = [
       longitudeDelta: 0.0421,
     },
     status: 'accepted',
+    payment: 'completed',
     acceptedAt: new Date(Date.now() - 1 * 60 * 60 * 1000),
     CourierDetails: {
       CourierId: 'driver2',
@@ -289,6 +294,7 @@ const mockSMEDeliveries: DeliveryRequest[] = [
       longitudeDelta: 0.0421,
     },
     status: 'pending',
+    payment: 'pending',
   },
 ];
 
@@ -661,6 +667,19 @@ export function DeliveryProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const updatePaymentStatus = (deliveryId: string, status: 'pending' | 'completed' | 'failed') => {
+    const updateStatus = (delivery: DeliveryRequest) => 
+      delivery.id === deliveryId ? { ...delivery, payment: status } : delivery;
+
+    setAllDeliveries(prev => prev.map(updateStatus));
+    setPendingOngoingDeliveries(prev => prev.map(updateStatus));
+    setSmeDeliveries(prev => prev.map(updateStatus));
+    
+    if (currentDelivery?.id === deliveryId) {
+      setCurrentDeliveryState(prev => prev ? { ...prev, payment: status } : null);
+    }
+  };
+
   const getDeliveryById = (id: string): DeliveryRequest | null => {
     return [...allDeliveries, ...pendingOngoingDeliveries, ...smeDeliveries].find(d => d.id === id) || null;
   };
@@ -686,6 +705,7 @@ export function DeliveryProvider({ children }: { children: ReactNode }) {
       refreshDeliveries,
       uploadImage,
       verifyCode,
+      updatePaymentStatus,
     }}>
       {children}
     </DeliveryContext.Provider>
