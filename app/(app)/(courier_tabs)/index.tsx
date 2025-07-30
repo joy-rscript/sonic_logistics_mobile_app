@@ -38,6 +38,17 @@ const SNAP_POINTS = {
 };
 import { NotificationPanel } from '@/components/ui/NotificationPanel';
 
+const NotificationBell = ({ hasUnread, onPress }: { hasUnread: boolean; onPress: () => void }) => (
+  <TouchableOpacity onPress={onPress} style={styles.notificationButton}>
+    <Bell size={24} color={Colors.light.text} />
+    {hasUnread && (
+      <View style={styles.notificationBadge}>
+        <Text style={styles.notificationBadgeText}>!</Text>
+      </View>
+    )}
+  </TouchableOpacity>
+);
+
 export default function CourierHomeScreen() {
   const isSME = true;
 
@@ -514,10 +525,12 @@ export default function CourierHomeScreen() {
                 </Card>
               )}
             </View>
-          <NotificationBell 
-            hasUnread={unreadCount > 0}
-            onPress={() => setShowNotificationPanel(true)}
-          />
+          ) : (
+            <NotificationBell 
+              hasUnread={unreadCount > 0}
+              onPress={() => setShowNotificationPanel(true)}
+            />
+          )}
         </View>
       ) : (
         // Show map and delivery stepper when there's a current delivery
