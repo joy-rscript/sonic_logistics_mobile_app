@@ -25,9 +25,7 @@ This document provides comprehensive API specifications for the Sonic Africa Log
 ```typescript
 POST /auth/signup
 ```
-
 **Purpose**: Register new users (SME or Courier)
-
 **Parameters**:
 ```typescript
 {
