@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { StyleSheet, Text, View, SafeAreaView, ScrollView, TouchableOpacity, Image } from 'react-native';
-import { Clock, MapPin, Package, CircleCheck as CheckCircle, CircleAlert as AlertCircle } from 'lucide-react-native';
+import { Clock, MapPin, Package, CircleCheck as CheckCircle, CircleAlert as AlertCircle, Phone, MessageSquare } from 'lucide-react-native';
+import { router } from 'expo-router';
+import { Linking } from 'react-native';
 import Colors from '@/constants/Colors';
 import { SPACING, FONT, FONT_SIZE, BORDER_RADIUS, SHADOWS } from '@/constants/Theme';
 import { Card } from '@/components/ui/Card';
@@ -20,6 +22,24 @@ export default function CourierDeliveriesScreen() {
 
   const handleDeliveryPress = (delivery: any) => {
     setCurrentDelivery(delivery);
+  };
+  
+  const handleCallClient = (delivery: any) => {
+    // In a real app, you'd get the client's phone number from the delivery data
+    const phoneNumber = delivery.ClientDetails?.phone || '+254712345678';
+    Linking.openURL(`tel:${phoneNumber}`);
+  };
+  
+  const handleChatWithClient = (delivery: any) => {
+    // Navigate to messaging with client context
+    router.push({
+      pathname: '/(app)/(courier_tabs)/messaging',
+      params: { 
+        clientId: delivery.ClientDetails?.smeId,
+        clientName: delivery.ClientDetails?.smeName,
+        deliveryId: delivery.id
+      }
+    });
   };
 
   const handlePickupComplete = (deliveryId: string) => {
@@ -98,18 +118,37 @@ export default function CourierDeliveriesScreen() {
                   styles.deliveryCard,
                   isCurrentDelivery && styles.currentDeliveryCard
                 ]}>
-                  <View style={styles.deliveryHeader}>
+                  <TouchableOpacity 
+                    style={styles.deliveryHeader}
+                    onPress={() => handleChatWithClient(delivery)}
+                  >
                     <View style={styles.deliveryInfo}>
-                      <Text style={styles.clientName}>{delivery.clientName}</Text>
-                      <Text style={styles.clientType}>{delivery.clientType}</Text>
+                      <Text style={styles.clientName}>{delivery.ClientDetails?.smeName || delivery.clientName}</Text>
+                      <Text style={styles.clientType}>{delivery.ClientDetails?.businessIndustry || delivery.clientType}</Text>
                     </View>
-                    <View style={styles.priceContainer}>
-                      <Text style={styles.priceText}>KSh {delivery.price}</Text>
+                    <View style={styles.headerActions}>
+                      <View style={styles.priceContainer}>
+                        <Text style={styles.priceText}>KSh {delivery.PackageDetails?.price || delivery.price}</Text>
+                      </View>
+                      <View style={styles.actionButtons}>
+                        <TouchableOpacity 
+                          style={styles.actionButton}
+                          onPress={() => handleCallClient(delivery)}
+                        >
+                          <Phone size={16} color={Colors.light.primary} />
+                        </TouchableOpacity>
+                        <TouchableOpacity 
+                          style={styles.actionButton}
+                          onPress={() => handleChatWithClient(delivery)}
+                        >
+                          <MessageSquare size={16} color={Colors.light.primary} />
+                        </TouchableOpacity>
+                      </View>
                       {isCurrentDelivery && (
                         <Badge label="Current" variant="primary" size="small" />
                       )}
                     </View>
-                  </View>
+                  </TouchableOpacity>
 
                   <View style={styles.routeContainer}>
                     <View style={styles.routeStep}>
@@ -122,7 +161,7 @@ export default function CourierDeliveriesScreen() {
                       <View style={styles.routeInfo}>
                         <Text style={styles.routeLabel}>Pickup</Text>
                         <Text style={styles.routeAddress} numberOfLines={1}>
-                          {delivery.pickup}
+                          {delivery.pickupLocation || delivery.pickup}
                         </Text>
                       </View>
                       {delivery.tracker?.pickup === 'pending' && (
@@ -147,7 +186,7 @@ export default function CourierDeliveriesScreen() {
                       <View style={styles.routeInfo}>
                         <Text style={styles.routeLabel}>Drop Off</Text>
                         <Text style={styles.routeAddress} numberOfLines={1}>
-                          {delivery.dropoff}
+                          {delivery.dropoffLocation || delivery.dropoff}
                         </Text>
                       </View>
                       {delivery.tracker?.pickup === 'completed' && delivery.tracker?.dropoff === 'pending' && (
@@ -265,6 +304,21 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'flex-start',
     marginBottom: SPACING.md,
+  },
+  headerActions: {
+    alignItems: 'flex-end',
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    marginTop: SPACING.xs,
+    gap: SPACING.xs,
+  },
+  actionButton: {
+    padding: SPACING.xs,
+    backgroundColor: Colors.light.background,
+    borderRadius: BORDER_RADIUS.sm,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
   },
   deliveryInfo: {
     flex: 1,

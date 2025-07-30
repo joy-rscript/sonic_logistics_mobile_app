@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   Alert,
   SafeAreaView,
+  StatusBar,
 } from 'react-native';
 import { ArrowLeft, CreditCard, Smartphone, Building, CircleCheck as CheckCircle, Circle as XCircle } from 'lucide-react-native';
 import LottieView from 'lottie-react-native';
@@ -341,7 +342,9 @@ export function PaymentModal({
       animationType="slide"
       presentationStyle="fullScreen"
       onRequestClose={handleClose}
+      statusBarTranslucent={true}
     >
+      <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
       <SafeAreaView style={styles.container}>
         {/* Header */}
         <View style={styles.header}>
@@ -451,6 +454,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.light.background,
+    paddingTop: StatusBar.currentHeight || 0,
   },
   header: {
     flexDirection: 'row',

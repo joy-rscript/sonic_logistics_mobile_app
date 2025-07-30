@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { StyleSheet, Text, View, SafeAreaView, ScrollView, TouchableOpacity, Alert } from 'react-native';
-import { Search, Filter, MapPin, User, Clock } from 'lucide-react-native';
+import { Search, Filter, MapPin, User, Clock, CreditCard } from 'lucide-react-native';
 import { router } from 'expo-router';
 import Colors from '@/constants/Colors';
 import { SPACING, FONT, FONT_SIZE, BORDER_RADIUS } from '@/constants/Theme';
@@ -164,6 +164,10 @@ export default function SMEDeliveriesScreen() {
               
               {shipment.payment === 'pending' && (
                 <View style={styles.pendingPaymentSection}>
+                  <View style={styles.pendingPaymentHeader}>
+                    <CreditCard size={16} color={Colors.light.warning} />
+                    <Text style={styles.pendingPaymentTitle}>Payment Required</Text>
+                  </View>
                   <Text style={styles.pendingPaymentText}>
                     Payment is required to make this delivery available to couriers.
                   </Text>
@@ -350,9 +354,22 @@ const styles = StyleSheet.create({
   },
   pendingPaymentSection: {
     backgroundColor: `${Colors.light.warning}10`,
+    borderWidth: 1,
+    borderColor: `${Colors.light.warning}40`,
     padding: SPACING.md,
     borderRadius: BORDER_RADIUS.sm,
     marginBottom: SPACING.sm,
+  },
+  pendingPaymentHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: SPACING.xs,
+  },
+  pendingPaymentTitle: {
+    fontFamily: FONT.poppinsBold,
+    fontSize: FONT_SIZE.sm,
+    color: Colors.light.warning,
+    marginLeft: SPACING.xs,
   },
   pendingPaymentText: {
     fontFamily: FONT.regular,

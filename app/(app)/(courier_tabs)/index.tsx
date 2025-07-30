@@ -36,6 +36,7 @@ const SNAP_POINTS = {
   EXPANDED: screenHeight * 0.75,
   FULL: screenHeight * 0.9
 };
+import { NotificationPanel } from '@/components/ui/NotificationPanel';
 
 export default function CourierHomeScreen() {
   const isSME = true;
@@ -55,6 +56,7 @@ export default function CourierHomeScreen() {
   const [bottomSheetHeight, setBottomSheetHeight] = useState(SNAP_POINTS.COLLAPSED);
   const scrollViewRef = useRef<ScrollView>(null);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showNotificationPanel, setShowNotificationPanel] = useState(false);
   const [showInstructions, setShowInstructions] = useState(false);
   const [isDeliveryCompleted, setIsDeliveryCompleted] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
@@ -512,14 +514,10 @@ export default function CourierHomeScreen() {
                 </Card>
               )}
             </View>
-          ) : (
-            // Empty State - Show when no deliveries available and no current delivery
-            <View style={styles.emptyState}>
-              <Package size={64} color={Colors.light.placeholder} />
-              <Text style={styles.emptyStateTitle}>No Available Deliveries</Text>
-              <Text style={styles.emptyStateText}>Check back later for new delivery requests</Text>
-            </View>
-          )}
+          <NotificationBell 
+            hasUnread={unreadCount > 0}
+            onPress={() => setShowNotificationPanel(true)}
+          />
         </View>
       ) : (
         // Show map and delivery stepper when there's a current delivery
@@ -600,6 +598,12 @@ export default function CourierHomeScreen() {
           </Animated.View>
         </KeyboardAvoidingView>
       )}
+      
+      {/* Notification Panel */}
+      <NotificationPanel 
+        visible={showNotificationPanel}
+        onClose={() => setShowNotificationPanel(false)}
+      />
     </SafeAreaView>
   );
 }

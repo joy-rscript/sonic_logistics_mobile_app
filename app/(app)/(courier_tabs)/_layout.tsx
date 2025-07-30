@@ -1,14 +1,41 @@
 import { Tabs } from 'expo-router';
 import { StyleSheet } from 'react-native';
 import { Chrome as Home, Package, MessageSquare, User, Map } from 'lucide-react-native';
+import { View } from 'react-native';
 import Colors from '@/constants/Colors';
 import { FONT, FONT_SIZE } from '@/constants/Theme';
 import { useColorScheme } from 'react-native';
+import { TabBarBadge } from '@/components/ui/TabBarBadge';
+import { useNotifications } from '@/contexts/NotificationContext';
+import { useDelivery } from '@/contexts/DeliveryContext';
+import { useChat } from '@/contexts/ChatContext';
 
 export default function CourierTabLayout() {
   const colorScheme = useColorScheme();
   const colors = Colors[colorScheme ?? 'light'];
+  const { unreadCount: notificationCount } = useNotifications();
+  const { pendingOngoingDeliveries } = useDelivery();
+  const { chats } = useChat();
+  
+  const unreadMessagesCount = chats.reduce((total, chat) => total + chat.unreadCount, 0);
+  const activeDeliveriesCount = pendingOngoingDeliveries.length;
 
+  const TabIconWithBadge = ({ 
+    IconComponent, 
+    color, 
+    size, 
+    badgeCount 
+  }: { 
+    IconComponent: any; 
+    color: string; 
+    size: number; 
+    badgeCount: number; 
+  }) => (
+    <View style={{ position: 'relative' }}>
+      <IconComponent size={size} color={color} />
+      <TabBarBadge count={badgeCount} visible={badgeCount > 0} />
+    </View>
+  );
   return (
     <Tabs
       screenOptions={{
@@ -24,14 +51,28 @@ export default function CourierTabLayout() {
         name="index"
         options={{
           title: 'Home',
-          tabBarIcon: ({ color, size }) => <Home size={size} color={color} />,
+          tabBarIcon: ({ color, size }) => (
+            <TabIconWithBadge 
+              IconComponent={Home} 
+              color={color} 
+              size={size} 
+              badgeCount={notificationCount} 
+            />
+          ),
         }}
       />
       <Tabs.Screen
         name="deliveries"
         options={{
           title: 'Deliveries',
-          tabBarIcon: ({ color, size }) => <Package size={size} color={color} />,
+          tabBarIcon: ({ color, size }) => (
+            <TabIconWithBadge 
+              IconComponent={Package} 
+              color={color} 
+              size={size} 
+              badgeCount={activeDeliveriesCount} 
+            />
+          ),
         }}
       />
       <Tabs.Screen
@@ -45,7 +86,14 @@ export default function CourierTabLayout() {
         name="messaging"
         options={{
           title: 'Messages',
-          tabBarIcon: ({ color, size }) => <MessageSquare size={size} color={color} />,
+          tabBarIcon: ({ color, size }) => (
+            <TabIconWithBadge 
+              IconComponent={MessageSquare} 
+              color={color} 
+              size={size} 
+              badgeCount={unreadMessagesCount} 
+            />
+          ),
         }}
       />
       <Tabs.Screen
