@@ -9,7 +9,6 @@ import {
   ActivityIndicator,
   Alert,
   SafeAreaView,
-  StatusBar,
 } from 'react-native';
 import { ArrowLeft, CreditCard, Smartphone, Building, CircleCheck as CheckCircle, Circle as XCircle } from 'lucide-react-native';
 import LottieView from 'lottie-react-native';
@@ -133,7 +132,7 @@ export function PaymentModal({
       const paymentData = {
         deliveryRequestId: deliveryData.id,
         amount: charges!.charges,
-        method: 'card',
+        method: 'card' as 'card' | 'mobile_money' | 'bank_transfer',
         smeId: deliveryData.ClientDetails.smeId,
       };
 
@@ -165,7 +164,7 @@ export function PaymentModal({
       const paymentData = {
         deliveryRequestId: deliveryData.id,
         amount: charges!.charges,
-        method: 'mobile_money',
+        method: 'mobile_money' as 'card' | 'mobile_money' | 'bank_transfer',
         smeId: deliveryData.ClientDetails.smeId,
         provider: selectedProvider,
       };
@@ -342,9 +341,7 @@ export function PaymentModal({
       animationType="slide"
       presentationStyle="fullScreen"
       onRequestClose={handleClose}
-      statusBarTranslucent={true}
     >
-      <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
       <SafeAreaView style={styles.container}>
         {/* Header */}
         <View style={styles.header}>
@@ -454,7 +451,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.light.background,
-    paddingTop: StatusBar.currentHeight || 0,
   },
   header: {
     flexDirection: 'row',
