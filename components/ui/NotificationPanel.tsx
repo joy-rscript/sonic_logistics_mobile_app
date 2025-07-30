@@ -9,7 +9,7 @@ import {
   Dimensions,
   TouchableWithoutFeedback,
 } from 'react-native';
-import { X, Clock, Package, AlertCircle } from 'lucide-react-native';
+import { X, Clock, Package, CircleAlert as AlertCircle } from 'lucide-react-native';
 import Colors from '@/constants/Colors';
 import { SPACING, FONT, FONT_SIZE, BORDER_RADIUS, SHADOWS } from '@/constants/Theme';
 import { useNotifications } from '@/contexts/NotificationContext';
