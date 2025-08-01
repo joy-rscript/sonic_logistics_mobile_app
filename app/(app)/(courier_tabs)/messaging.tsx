@@ -4,10 +4,13 @@ import {
   TextInput, Image, ScrollView 
 } from 'react-native';
 import { Search, Phone, MessageSquare, Users, Shield } from 'lucide-react-native';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, router } from 'expo-router';
 import Colors from '@/constants/Colors';
 import { SPACING, FONT, FONT_SIZE, BORDER_RADIUS } from '@/constants/Theme';
 import { mockChats } from '@/data/mockData';
+import { NotificationBell } from '@/components/ui/NotificatonBell';
+import { useNotificationsByType } from '@/contexts/NotificationContext';
+import { NotificationPanel } from '@/components/ui/NotificationPanel';
 
 export default function CourierMessagingScreen() {
   const params = useLocalSearchParams();
@@ -51,8 +54,18 @@ export default function CourierMessagingScreen() {
     },
   ];
   
+  const handleChatPress = (chatId: string, clientName: string) => {
+    router.push({
+      pathname: '/(app)/(courier_tabs)/chat/[chatId]',
+      params: { chatId, clientName }
+    });
+  };
+  
   const renderChatItem = ({ item }: { item: typeof mockChats[0] }) => (
-    <TouchableOpacity style={styles.chatItem}>
+    <TouchableOpacity 
+      style={styles.chatItem}
+      onPress={() => handleChatPress(item.id, item.name)}
+    >
       <View style={styles.avatarContainer}>
         <Image source={{ uri: item.avatar }} style={styles.avatar} />
         {item.online && <View style={styles.onlineIndicator} />}
@@ -99,7 +112,10 @@ export default function CourierMessagingScreen() {
         <TouchableOpacity style={styles.officerActionButton}>
           <Phone size={18} color={Colors.light.primary} />
         </TouchableOpacity>
-        <TouchableOpacity style={styles.officerActionButton}>
+        <TouchableOpacity 
+          style={styles.officerActionButton}
+          onPress={() => handleChatPress(item.id, item.name)}
+        >
           <MessageSquare size={18} color={Colors.light.primary} />
         </TouchableOpacity>
       </View>
@@ -109,8 +125,11 @@ export default function CourierMessagingScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Messages</Text>
-        <Text style={styles.headerSubtitle}>Chat with your clients</Text>
+        <View>
+          <Text style={styles.headerTitle}>Meccssages</Text>
+          <Text style={styles.headerSubtitle}>Chat with your clients</Text>
+        </View>
+        
       </View>
       
       <View style={styles.tabsContainer}>
@@ -175,6 +194,9 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.light.background,
   },
   header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     paddingHorizontal: SPACING.lg,
     paddingTop: SPACING.xl,
     paddingBottom: SPACING.md,
