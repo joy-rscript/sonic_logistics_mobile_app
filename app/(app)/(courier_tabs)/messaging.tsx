@@ -4,19 +4,25 @@ import {
   TextInput, Image, ScrollView 
 } from 'react-native';
 import { Search, Phone, MessageSquare, Users, Shield } from 'lucide-react-native';
-import { useLocalSearchParams, router } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import Colors from '@/constants/Colors';
 import { SPACING, FONT, FONT_SIZE, BORDER_RADIUS } from '@/constants/Theme';
 import { mockChats } from '@/data/mockData';
-import { NotificationBell } from '@/components/ui/NotificatonBell';
-import { useNotificationsByType } from '@/contexts/NotificationContext';
-import { NotificationPanel } from '@/components/ui/NotificationPanel';
+import { ChatComponent } from '@/components/ui/ChatComponent';
 
 export default function CourierMessagingScreen() {
   const params = useLocalSearchParams();
   const [searchQuery, setSearchQuery] = useState('');
   const [chats, setChats] = useState(mockChats);
   const [activeTab, setActiveTab] = useState<'clients' | 'immigration'>('clients');
+  const [showChat, setShowChat] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<{
+    id: string;
+    name: string;
+    phone?: string;
+    avatar?: string;
+    deliveryId?: string;
+  } | null>(null);
   
   // Mock immigration officers data
   const immigrationOfficers = [
@@ -54,17 +60,21 @@ export default function CourierMessagingScreen() {
     },
   ];
   
-  const handleChatPress = (chatId: string, clientName: string) => {
-    router.push({
-      pathname: '/(app)/(courier_tabs)/chat/[chatId]',
-      params: { chatId, clientName }
+  const handleChatPress = (userId: string, userName: string, userPhone?: string, userAvatar?: string, deliveryId?: string) => {
+    setSelectedUser({
+      id: userId,
+      name: userName,
+      phone: userPhone,
+      avatar: userAvatar,
+      deliveryId,
     });
+    setShowChat(true);
   };
   
   const renderChatItem = ({ item }: { item: typeof mockChats[0] }) => (
     <TouchableOpacity 
       style={styles.chatItem}
-      onPress={() => handleChatPress(item.id, item.name)}
+      onPress={() => handleChatPress(item.id, item.name, '+254712345678', item.avatar)}
     >
       <View style={styles.avatarContainer}>
         <Image source={{ uri: item.avatar }} style={styles.avatar} />
@@ -109,12 +119,15 @@ export default function CourierMessagingScreen() {
       </View>
       
       <View style={styles.officerActions}>
-        <TouchableOpacity style={styles.officerActionButton}>
+        <TouchableOpacity 
+          style={styles.officerActionButton}
+          onPress={() => Linking.openURL(`tel:${item.phone}`)}
+        >
           <Phone size={18} color={Colors.light.primary} />
         </TouchableOpacity>
         <TouchableOpacity 
           style={styles.officerActionButton}
-          onPress={() => handleChatPress(item.id, item.name)}
+          onPress={() => handleChatPress(item.id, item.name, item.phone, item.avatar)}
         >
           <MessageSquare size={18} color={Colors.light.primary} />
         </TouchableOpacity>
@@ -182,6 +195,22 @@ export default function CourierMessagingScreen() {
           keyExtractor={item => item.id}
           contentContainerStyle={styles.chatsList}
           showsVerticalScrollIndicator={false}
+        />
+      )}
+      
+      {/* Chat Component */}
+      {selectedUser && (
+        <ChatComponent
+          visible={showChat}
+          onClose={() => {
+            setShowChat(false);
+            setSelectedUser(null);
+          }}
+          userId={selectedUser.id}
+          userName={selectedUser.name}
+          userPhone={selectedUser.phone}
+          userAvatar={selectedUser.avatar}
+          deliveryId={selectedUser.deliveryId}
         />
       )}
     </SafeAreaView>

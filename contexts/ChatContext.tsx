@@ -9,7 +9,21 @@ import {
   Chat, 
   ChatMessage 
 } from '@/utils/chatApi';
+import apiClient from '@/utils/apiClient';
 
+interface CreateMessageParams {
+  recipientId: string;
+  message: string;
+  type: 'text' | 'image' | 'audio' | 'location' | 'file';
+  imageUrl?: string;
+  audioUrl?: string;
+  fileUrl?: string;
+  location?: {
+    latitude: number;
+    longitude: number;
+  };
+  deliveryId?: string;
+}
 interface ChatContextType {
   chats: Chat[];
   currentChat: Chat | null;
@@ -24,6 +38,8 @@ interface ChatContextType {
   refreshChats: () => Promise<void>;
   loadMessages: (chatId: string) => Promise<void>;
   createChat: (participants: string[], deliveryId?: string) => Promise<Chat>;
+  loadChatHistory: (userId: string) => Promise<ChatMessage[]>;
+  createNewMessage: (params: CreateMessageParams) => Promise<ChatMessage>;
 }
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
@@ -187,6 +203,38 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const loadChatHistory = async (userId: string): Promise<ChatMessage[]> => {
+    try {
+      const response = await apiClient.get(`/chats/history/${userId}`);
+      return response.data.map((msg: any) => ({
+        ...msg,
+        timestamp: new Date(msg.timestamp),
+      }));
+    } catch (error) {
+      console.warn('API unavailable, using mock data for chat history:', error);
+      // Return mock chat history
+      return [
+        {
+          id: `msg-${Date.now()}-1`,
+          senderId: userId,
+          senderName: 'Client',
+          message: 'Hello, I wanted to confirm if my package will arrive today.',
+          timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000),
+          type: 'text',
+          read: false,
+        },
+        {
+          id: `msg-${Date.now()}-2`,
+          senderId: 'courier1',
+          senderName: 'Courier',
+          message: 'Yes, I am currently on my way to the pickup location. ETA is 30 minutes.',
+          timestamp: new Date(Date.now() - 1.5 * 60 * 60 * 1000),
+          type: 'text',
+          read: true,
+        },
+      ];
+    }
+  };
   return (
     <ChatContext.Provider value={{
       chats,
@@ -208,8 +256,35 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   );
 }
 
+  const createNewMessage = async (params: CreateMessageParams): Promise<ChatMessage> => {
+    try {
+      const response = await apiClient.post('/chats/messages/create', params);
+      return {
+        ...response.data,
+        timestamp: new Date(response.data.timestamp),
+      };
+    } catch (error) {
+      console.warn('API unavailable, using mock data for create message:', error);
+      // Return mock message
+      return {
+        id: `msg-${Date.now()}`,
+        senderId: 'courier1', // This should come from auth context
+        senderName: 'Courier',
+        message: params.message,
+        timestamp: new Date(),
+        type: params.type,
+        imageUrl: params.imageUrl,
+        audioUrl: params.audioUrl,
+        fileUrl: params.fileUrl,
+        location: params.location,
+        read: false,
+      };
+    }
+  };
 export function useChat() {
   const context = useContext(ChatContext);
+      loadChatHistory,
+      createNewMessage,
   if (context === undefined) {
     throw new Error('useChat must be used within a ChatProvider');
   }

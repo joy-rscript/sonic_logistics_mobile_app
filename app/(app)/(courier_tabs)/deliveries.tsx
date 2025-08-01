@@ -1,13 +1,13 @@
 import { useState } from 'react';
 import { StyleSheet, Text, View, SafeAreaView, ScrollView, TouchableOpacity, Image } from 'react-native';
 import { Clock, MapPin, Package, CircleCheck as CheckCircle, CircleAlert as AlertCircle, Phone, MessageSquare } from 'lucide-react-native';
-import { router } from 'expo-router';
 import { Linking } from 'react-native';
 import Colors from '@/constants/Colors';
 import { SPACING, FONT, FONT_SIZE, BORDER_RADIUS, SHADOWS } from '@/constants/Theme';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { useDelivery } from '@/contexts/DeliveryContext';
+import { ChatComponent } from '@/components/ui/ChatComponent';
 
 export default function CourierDeliveriesScreen() {
   const { 
@@ -19,6 +19,14 @@ export default function CourierDeliveriesScreen() {
   } = useDelivery();
 
   const [activeTab, setActiveTab] = useState('ongoing');
+  const [showChat, setShowChat] = useState(false);
+  const [selectedClient, setSelectedClient] = useState<{
+    id: string;
+    name: string;
+    phone?: string;
+    avatar?: string;
+    deliveryId?: string;
+  } | null>(null);
 
   const handleDeliveryPress = (delivery: any) => {
     setCurrentDelivery(delivery);
@@ -31,15 +39,14 @@ export default function CourierDeliveriesScreen() {
   };
   
   const handleChatWithClient = (delivery: any) => {
-    // Navigate to messaging with client context
-    router.push({
-      pathname: '/(app)/(courier_tabs)/messaging',
-      params: { 
-        clientId: delivery.ClientDetails?.smeId,
-        clientName: delivery.ClientDetails?.smeName,
-        deliveryId: delivery.id
-      }
+    setSelectedClient({
+      id: delivery.ClientDetails?.smeId || delivery.id,
+      name: delivery.ClientDetails?.smeName || delivery.clientName,
+      phone: delivery.ClientDetails?.phone || '+254712345678',
+      avatar: 'https://i.ibb.co/M8JnWhy/avatar.png',
+      deliveryId: delivery.id,
     });
+    setShowChat(true);
   };
 
   const handlePickupComplete = (deliveryId: string) => {
@@ -239,6 +246,22 @@ export default function CourierDeliveriesScreen() {
           </View>
         )}
       </ScrollView>
+      
+      {/* Chat Component */}
+      {selectedClient && (
+        <ChatComponent
+          visible={showChat}
+          onClose={() => {
+            setShowChat(false);
+            setSelectedClient(null);
+          }}
+          userId={selectedClient.id}
+          userName={selectedClient.name}
+          userPhone={selectedClient.phone}
+          userAvatar={selectedClient.avatar}
+          deliveryId={selectedClient.deliveryId}
+        />
+      )}
     </SafeAreaView>
   );
 }
