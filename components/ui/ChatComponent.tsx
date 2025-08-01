@@ -15,7 +15,7 @@ import {
   Linking,
   Animated,
 } from 'react-native';
-import { ArrowLeft, Send, Plus, Camera, Mic, Phone, MoreVertical, Image as ImageIcon, MapPin, Paperclip, X } from 'lucide-react-native';
+import { ArrowLeft, Send, Plus, Camera, Mic, Phone, MoveVertical as MoreVertical, Image as ImageIcon, MapPin, Paperclip, X } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import { Audio } from 'expo-av';
