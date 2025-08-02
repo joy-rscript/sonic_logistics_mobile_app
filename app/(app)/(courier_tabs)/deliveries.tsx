@@ -8,8 +8,15 @@ import { SPACING, FONT, FONT_SIZE, BORDER_RADIUS, SHADOWS } from '@/constants/Th
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { useDelivery } from '@/contexts/DeliveryContext';
+import { NotificationBell } from '@/components/ui/NotificatonBell';
+import { useNotificationsByType } from '@/contexts/NotificationContext';
+import { NotificationPanel } from '@/components/ui/NotificationPanel';
 
 export default function CourierDeliveriesScreen() {
+ 
+  const [activeTab, setActiveTab] = useState('ongoing');
+  const [showNotificationPanel, setShowNotificationPanel] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
   const { 
     pendingOngoingDeliveries, 
     currentDelivery, 
@@ -18,14 +25,18 @@ export default function CourierDeliveriesScreen() {
     completeDelivery 
   } = useDelivery();
 
-  const [activeTab, setActiveTab] = useState('ongoing');
+  const { 
+    notifications: deliveryNotifications, 
+    unreadCount: deliveryUnreadCount, 
+    markAsRead,
+    refreshNotifications 
+  } = useNotificationsByType('delivery');
 
   const handleDeliveryPress = (delivery: any) => {
     setCurrentDelivery(delivery);
   };
   
   const handleCallClient = (delivery: any) => {
-    // In a real app, you'd get the client's phone number from the delivery data
     const phoneNumber = delivery.ClientDetails?.phone || '+254712345678';
     Linking.openURL(`tel:${phoneNumber}`);
   };
@@ -47,18 +58,22 @@ export default function CourierDeliveriesScreen() {
   const handlePickupComplete = (deliveryId: string) => {
     updateDeliveryTracker(deliveryId, {
       pickup: 'completed',
-      pickupCode: '12345', // In real app, this would come from user input
+      pickupCode: '12345', 
     });
   };
 
   const handleDropoffComplete = (deliveryId: string) => {
     updateDeliveryTracker(deliveryId, {
       dropoff: 'completed',
-      dropoffCode: '67890', // In real app, this would come from user input
+      dropoffCode: '67890', 
     });
     
     // Complete the delivery
     completeDelivery(deliveryId);
+  };
+
+  const handleNotificationRead = (id: string) => {
+    markAsRead(id);
   };
 
   const getStatusColor = (status: string) => {
@@ -82,8 +97,14 @@ export default function CourierDeliveriesScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
+        <View>
         <Text style={styles.headerTitle}>My Deliveries</Text>
         <Text style={styles.headerSubtitle}>Track your delivery progress</Text>
+        </View>
+        <NotificationBell 
+          hasUnread={deliveryUnreadCount > 0}
+          onPress={() => setShowNotificationPanel(true)}
+        />
       </View>
       
       <View style={styles.tabsContainer}>
@@ -168,7 +189,7 @@ export default function CourierDeliveriesScreen() {
                       </View>
                       {delivery.tracker?.pickup === 'pending' && (
                         <TouchableOpacity 
-                          style={styles.actionButton}
+                          style={styles.primaryActionButton}
                           onPress={() => handlePickupComplete(delivery.id)}
                         >
                           <Text style={styles.actionButtonText}>Complete</Text>
@@ -193,7 +214,7 @@ export default function CourierDeliveriesScreen() {
                       </View>
                       {delivery.tracker?.pickup === 'completed' && delivery.tracker?.dropoff === 'pending' && (
                         <TouchableOpacity 
-                          style={styles.actionButton}
+                          style={styles.primaryActionButton}
                           onPress={() => handleDropoffComplete(delivery.id)}
                         >
                           <Text style={styles.actionButtonText}>Complete</Text>
@@ -241,6 +262,13 @@ export default function CourierDeliveriesScreen() {
           </View>
         )}
       </ScrollView>
+      <NotificationPanel
+        visible={showNotificationPanel}
+        onClose={() => setShowNotificationPanel(false)}
+        notifications={deliveryNotifications}
+        onNotificationRead={markAsRead}
+        title="Delive Notifications"
+      />
     </SafeAreaView>
   );
 }
@@ -382,7 +410,7 @@ const styles = StyleSheet.create({
     marginLeft: 11,
     marginVertical: 2,
   },
-  actionButton: {
+  primaryActionButton: {
     backgroundColor: Colors.light.primary,
     paddingHorizontal: SPACING.sm,
     paddingVertical: SPACING.xs / 2,
