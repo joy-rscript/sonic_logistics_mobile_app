@@ -1,10 +1,11 @@
 import { useState } from 'react';
+import { useEffect } from 'react';
 import { 
   StyleSheet, Text, View, SafeAreaView, FlatList, TouchableOpacity, 
   TextInput, Image, ScrollView 
 } from 'react-native';
 import { Search, Phone, MessageSquare, Users, Shield } from 'lucide-react-native';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, Linking } from 'expo-router';
 import Colors from '@/constants/Colors';
 import { SPACING, FONT, FONT_SIZE, BORDER_RADIUS } from '@/constants/Theme';
 import { mockChats } from '@/data/mockData';
@@ -12,6 +13,7 @@ import { ChatComponent } from '@/components/ui/ChatComponent';
 
 export default function CourierMessagingScreen() {
   const params = useLocalSearchParams();
+  
   const [searchQuery, setSearchQuery] = useState('');
   const [chats, setChats] = useState(mockChats);
   const [activeTab, setActiveTab] = useState<'clients' | 'immigration'>('clients');
@@ -23,6 +25,19 @@ export default function CourierMessagingScreen() {
     avatar?: string;
     deliveryId?: string;
   } | null>(null);
+  
+  // Handle incoming navigation from deliveries tab
+  useEffect(() => {
+    if (params.openChatWithUser) {
+      handleChatPress(
+        params.openChatWithUser as string,
+        params.userName as string,
+        params.userPhone as string,
+        params.userAvatar as string,
+        params.deliveryId as string
+      );
+    }
+  }, [params]);
   
   // Mock immigration officers data
   const immigrationOfficers = [
@@ -69,6 +84,10 @@ export default function CourierMessagingScreen() {
       deliveryId,
     });
     setShowChat(true);
+  };
+  
+  const handlePhoneCall = (phoneNumber: string) => {
+    Linking.openURL(`tel:${phoneNumber}`);
   };
   
   const renderChatItem = ({ item }: { item: typeof mockChats[0] }) => (
@@ -121,7 +140,7 @@ export default function CourierMessagingScreen() {
       <View style={styles.officerActions}>
         <TouchableOpacity 
           style={styles.officerActionButton}
-          onPress={() => Linking.openURL(`tel:${item.phone}`)}
+          onPress={() => handlePhoneCall(item.phone)}
         >
           <Phone size={18} color={Colors.light.primary} />
         </TouchableOpacity>
