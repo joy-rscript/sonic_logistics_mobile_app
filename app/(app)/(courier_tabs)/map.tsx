@@ -1,15 +1,35 @@
+import { useState } from 'react';
 import { StyleSheet, Text, View, SafeAreaView, TouchableOpacity } from 'react-native';
 import { Navigation, MapPin, Clock } from 'lucide-react-native';
 import Colors from '@/constants/Colors';
 import { SPACING, FONT, FONT_SIZE, BORDER_RADIUS } from '@/constants/Theme';
 import { Card } from '@/components/ui/Card';
+import { NotificationBell } from '@/components/ui/NotificatonBell';
+import { useNotificationsByType } from '@/contexts/NotificationContext';
+import { NotificationPanel } from '@/components/ui/NotificationPanel';
 
 export default function CourierMapScreen() {
+  const [showNotificationPanel, setShowNotificationPanel] = useState(false);
+  
+  // Use map-specific notifications
+  const { 
+    notifications: mapNotifications, 
+    unreadCount: mapUnreadCount, 
+    markAsRead,
+    refreshNotifications 
+  } = useNotificationsByType('map');
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Delivery Map</Text>
-        <Text style={styles.headerSubtitle}>Navigate to your destinations</Text>
+        <View>
+          <Text style={styles.headerTitle}>Delivery Map</Text>
+          <Text style={styles.headerSubtitle}>Navigate to your destinations</Text>
+        </View>
+        <NotificationBell 
+          hasUnread={mapUnreadCount > 0}
+          onPress={() => setShowNotificationPanel(true)}
+        />
       </View>
 
       {/* Map placeholder - In a real app, you'd use react-native-maps */}
@@ -50,6 +70,14 @@ export default function CourierMapScreen() {
           </TouchableOpacity>
         </Card>
       </View>
+
+      <NotificationPanel
+        visible={showNotificationPanel}
+        onClose={() => setShowNotificationPanel(false)}
+        notifications={mapNotifications}
+        onNotificationRead={markAsRead}
+        title="Map Notifications"
+      />
     </SafeAreaView>
   );
 }
@@ -60,6 +88,9 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.light.background,
   },
   header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
     paddingHorizontal: SPACING.lg,
     paddingTop: SPACING.xl,
     paddingBottom: SPACING.md,
