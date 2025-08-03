@@ -1,75 +1,70 @@
 import React, { useState } from 'react';
 import { StyleSheet, Text, View, TouchableOpacity, ScrollView, TextInput, Image } from 'react-native';
-import { Camera, Check, Upload } from 'lucide-react-native';
+import { Camera, Check, Upload, MessageSquare, Phone } from 'lucide-react-native';
 import Colors from '@/constants/Colors';
 import { SPACING, FONT, FONT_SIZE, BORDER_RADIUS } from '@/constants/Theme';
 import { Button } from './Button';
 import { useDelivery } from '@/contexts/DeliveryContext';
+import * as ImagePicker from 'expo-image-picker';
+import { Alert } from 'react-native';
 
 interface DeliveryStepperProps {
   onStepComplete: (step: string, data?: any) => void;
   currentStep: number;
   isCompleted: boolean;
   deliveryId?: string;
+  deliveryData?: any;
 }
 
 interface StepData {
   id: string;
   title: string;
+  description: string;
   completed: boolean;
   disabled: boolean;
   expanded: boolean;
 }
 
-export function DeliveryStepper({ onStepComplete, currentStep, isCompleted, deliveryId }: DeliveryStepperProps) {
-  const [smsCode, setSmsCode] = useState('');
+export function DeliveryStepper({ onStepComplete, currentStep, isCompleted, deliveryId, deliveryData }: DeliveryStepperProps) {
+  const [pickupSmsCode, setPickupSmsCode] = useState('');
+  const [dropoffSmsCode, setDropoffSmsCode] = useState('');
   const [pickupImage, setPickupImage] = useState<string | null>(null);
   const [deliveryImage, setDeliveryImage] = useState<string | null>(null);
-  const [recipientCode, setRecipientCode] = useState('');
-  const { uploadImage, verifyCode, loading } = useDelivery();
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const { uploadImage, verifyCode, loading, sendSMSCode } = useDelivery();
 
   const steps: StepData[] = [
     {
-      id: 'pickup_done',
-      title: 'Mark pickup as done',
+      id: 'pickup_sms',
+      title: 'Enter pickup verification code',
+      description: 'Enter the SMS code sent to your phone to verify pickup location',
       completed: currentStep > 0,
       disabled: false,
       expanded: true,
     },
     {
-      id: 'sms_code',
-      title: 'Enter code from your SMS',
+      id: 'pickup_image',
+      title: 'Take pickup photo',
+      description: 'Take a photo of the package at pickup location for verification',
       completed: currentStep > 1,
       disabled: currentStep < 1,
       expanded: currentStep >= 1,
     },
     {
-      id: 'pickup_image',
-      title: 'Insert picture on pickup',
+      id: 'dropoff_sms',
+      title: 'Enter recipient verification code',
+      description: 'Enter the SMS code sent to the recipient to verify drop-off',
       completed: currentStep > 2,
       disabled: currentStep < 2,
       expanded: currentStep >= 2,
     },
     {
-      id: 'dropoff_done',
-      title: 'Mark drop-off as done',
+      id: 'dropoff_image',
+      title: 'Take delivery photo',
+      description: 'Take a photo of the delivered package for completion verification',
       completed: currentStep > 3,
       disabled: currentStep < 3,
       expanded: currentStep >= 3,
-    },
-    {
-      id: 'recipient_code',
-      title: 'Enter code from recipient',
-      completed: currentStep > 4,
-      disabled: currentStep < 4,
-      expanded: currentStep >= 4,
-    },
-    {
-      id: 'delivery_image',
-      title: 'Insert picture on delivery',
-      completed: currentStep > 5,
-      disabled: currentStep < 5,
-      expanded: currentStep >= 5,
     },
   ];
 
@@ -77,32 +72,49 @@ export function DeliveryStepper({ onStepComplete, currentStep, isCompleted, deli
     onStepComplete(stepId, data);
   };
 
-  const handleImageUpload = (type: 'pickup' | 'delivery') => {
-    // In a real app, this would open camera/gallery
-    const mockImageUri = 'https://images.pexels.com/photos/4481259/pexels-photo-4481259.jpeg?auto=compress&cs=tinysrgb&w=300&h=200&dpr=2';
-    
-    if (type === 'pickup') {
-      setPickupImage(mockImageUri);
-      if (deliveryId) {
-        uploadImage(deliveryId, mockImageUri, 'pickup').then(() => {
-          handleStepAction('pickup_image', { image: mockImageUri });
-        });
-      } else {
-        handleStepAction('pickup_image', { image: mockImageUri });
+  const handleImageUpload = async (type: 'pickup' | 'dropoff') => {
+    try {
+      // Request camera permissions
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission needed', 'Please grant camera permissions to take photos');
+        return;
       }
-    } else {
-      setDeliveryImage(mockImageUri);
-      if (deliveryId) {
-        uploadImage(deliveryId, mockImageUri, 'dropoff').then(() => {
-          handleStepAction('delivery_image', { image: mockImageUri });
-        });
-      } else {
-        handleStepAction('delivery_image', { image: mockImageUri });
+
+      // Launch camera
+      const result = await ImagePicker.launchCameraAsync({
+        allowsEditing: true,
+        aspect: [4, 3],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        const imageUri = result.assets[0].uri;
+        setIsUploadingImage(true);
+
+        if (type === 'pickup') {
+          setPickupImage(imageUri);
+          if (deliveryId) {
+            await uploadImage(deliveryId, imageUri, 'pickup');
+          }
+          handleStepAction('pickup_image', { image: imageUri });
+        } else {
+          setDeliveryImage(imageUri);
+          if (deliveryId) {
+            await uploadImage(deliveryId, imageUri, 'dropoff');
+          }
+          handleStepAction('dropoff_image', { image: imageUri });
+        }
       }
+    } catch (error) {
+      console.error('Error taking photo:', error);
+      Alert.alert('Error', 'Failed to take photo. Please try again.');
+    } finally {
+      setIsUploadingImage(false);
     }
   };
 
-  const handleCodeVerification = async (code: string, type: 'pickup' | 'dropoff', stepId: string) => {
+  const handleSMSVerification = async (code: string, type: 'pickup' | 'dropoff', stepId: string) => {
     if (!deliveryId) {
       handleStepAction(stepId, { code });
       return;
@@ -111,12 +123,33 @@ export function DeliveryStepper({ onStepComplete, currentStep, isCompleted, deli
     const isValid = await verifyCode(deliveryId, code, type);
     if (isValid) {
       handleStepAction(stepId, { code });
+      
+      // Send SMS for next step if needed
+      if (type === 'pickup' && stepId === 'pickup_sms') {
+        // After pickup SMS verification, we can proceed to photo
+        // No additional SMS needed for pickup photo
+      } else if (type === 'dropoff' && stepId === 'dropoff_sms') {
+        // After dropoff SMS verification, we can proceed to final photo
+        // No additional SMS needed for dropoff photo
+      }
     } else {
-      // Handle invalid code - you might want to show an error message
-      console.error('Invalid verification code');
+      Alert.alert('Invalid Code', 'The verification code you entered is incorrect. Please try again.');
     }
   };
 
+  const requestSMSCode = async (type: 'pickup' | 'dropoff') => {
+    if (!deliveryId) return;
+    
+    try {
+      await sendSMSCode(deliveryId, type);
+      Alert.alert(
+        'SMS Sent', 
+        `Verification code has been sent to ${type === 'pickup' ? 'your phone' : 'the recipient\'s phone'}.`
+      );
+    } catch (error) {
+      Alert.alert('Error', 'Failed to send SMS code. Please try again.');
+    }
+  };
   if (isCompleted) {
     return (
       <View style={styles.completionContainer}>
@@ -168,38 +201,48 @@ export function DeliveryStepper({ onStepComplete, currentStep, isCompleted, deli
                   {step.title}
                 </Text>
                 
+                <Text style={[
+                  styles.stepDescription,
+                  step.disabled && styles.stepDescriptionDisabled
+                ]}>
+                  {step.description}
+                </Text>
+                
                 {step.expanded && !step.disabled && (
                   <View style={styles.stepActions}>
-                    {step.id === 'pickup_done' && !step.completed && (
-                      <TouchableOpacity 
-                        style={styles.doneButton}
-                        onPress={() => handleStepAction('pickup_done')}
-                      >
-                        <Text style={styles.doneButtonText}>Done</Text>
-                      </TouchableOpacity>
-                    )}
-                    
-                    {step.id === 'sms_code' && !step.completed && (
+                    {step.id === 'pickup_sms' && !step.completed && (
                       <View style={styles.inputContainer}>
+                        <View style={styles.smsHeader}>
+                          <Text style={styles.smsInstructions}>
+                            Enter the 6-digit code sent to your phone
+                          </Text>
+                          <TouchableOpacity 
+                            style={styles.resendButton}
+                            onPress={() => requestSMSCode('pickup')}
+                          >
+                            <MessageSquare size={16} color={Colors.light.primary} />
+                            <Text style={styles.resendButtonText}>Resend SMS</Text>
+                          </TouchableOpacity>
+                        </View>
                         <TextInput
                           style={styles.codeInput}
-                          placeholder="Enter SMS code"
+                          placeholder="Enter 6-digit code"
                           placeholderTextColor={Colors.light.placeholder}
-                          value={smsCode}
-                          onChangeText={setSmsCode}
+                          value={pickupSmsCode}
+                          onChangeText={setPickupSmsCode}
                           keyboardType="numeric"
                           maxLength={6}
                         />
                         <TouchableOpacity 
-                          style={[styles.submitButton, (!smsCode || loading) && styles.submitButtonDisabled]}
+                          style={[styles.submitButton, (!pickupSmsCode || loading) && styles.submitButtonDisabled]}
                           onPress={() => {
-                            if (smsCode) {
-                              handleCodeVerification(smsCode, 'pickup', 'sms_code');
+                            if (pickupSmsCode) {
+                              handleSMSVerification(pickupSmsCode, 'pickup', 'pickup_sms');
                             }
                           }}
-                          disabled={!smsCode || loading}
+                          disabled={!pickupSmsCode || loading}
                         >
-                          <Text style={[styles.submitButtonText, (!smsCode || loading) && styles.submitButtonTextDisabled]}>
+                          <Text style={[styles.submitButtonText, (!pickupSmsCode || loading) && styles.submitButtonTextDisabled]}>
                             {loading ? 'Verifying...' : 'Submit'}
                           </Text>
                         </TouchableOpacity>
@@ -208,83 +251,104 @@ export function DeliveryStepper({ onStepComplete, currentStep, isCompleted, deli
                     
                     {step.id === 'pickup_image' && !step.completed && (
                       <View style={styles.imageUploadContainer}>
+                        <Text style={styles.imageInstructions}>
+                          Take a clear photo of the package at pickup location
+                        </Text>
                         {pickupImage ? (
                           <View style={styles.imagePreview}>
                             <Image source={{ uri: pickupImage }} style={styles.previewImage} />
                             <TouchableOpacity 
                               style={styles.confirmButton}
                               onPress={() => handleStepAction('pickup_image', { image: pickupImage })}
+                              disabled={isUploadingImage}
                             >
-                              <Text style={styles.confirmButtonText}>Confirm</Text>
+                              <Text style={styles.confirmButtonText}>
+                                {isUploadingImage ? 'Uploading...' : 'Confirm Photo'}
+                              </Text>
                             </TouchableOpacity>
                           </View>
                         ) : (
                           <TouchableOpacity 
                             style={styles.uploadButton}
                             onPress={() => handleImageUpload('pickup')}
+                            disabled={isUploadingImage}
                           >
                             <Camera size={20} color={Colors.light.primary} />
-                            <Text style={styles.uploadButtonText}>Take Photo</Text>
+                            <Text style={styles.uploadButtonText}>
+                              {isUploadingImage ? 'Processing...' : 'Take Pickup Photo'}
+                            </Text>
                           </TouchableOpacity>
                         )}
                       </View>
                     )}
                     
-                    {step.id === 'dropoff_done' && !step.completed && (
-                      <TouchableOpacity 
-                        style={styles.doneButton}
-                        onPress={() => handleStepAction('dropoff_done')}
-                      >
-                        <Text style={styles.doneButtonText}>Done</Text>
-                      </TouchableOpacity>
-                    )}
-                    
-                    {step.id === 'recipient_code' && !step.completed && (
+                    {step.id === 'dropoff_sms' && !step.completed && (
                       <View style={styles.inputContainer}>
+                        <View style={styles.smsHeader}>
+                          <Text style={styles.smsInstructions}>
+                            Enter the code sent to the recipient's phone
+                          </Text>
+                          <TouchableOpacity 
+                            style={styles.resendButton}
+                            onPress={() => requestSMSCode('dropoff')}
+                          >
+                            <Phone size={16} color={Colors.light.primary} />
+                            <Text style={styles.resendButtonText}>Send to Recipient</Text>
+                          </TouchableOpacity>
+                        </View>
                         <TextInput
                           style={styles.codeInput}
-                          placeholder="Enter recipient code"
+                          placeholder="Enter 6-digit code"
                           placeholderTextColor={Colors.light.placeholder}
-                          value={recipientCode}
-                          onChangeText={setRecipientCode}
+                          value={dropoffSmsCode}
+                          onChangeText={setDropoffSmsCode}
                           keyboardType="numeric"
                           maxLength={6}
                         />
                         <TouchableOpacity 
-                          style={[styles.submitButton, (!recipientCode || loading) && styles.submitButtonDisabled]}
+                          style={[styles.submitButton, (!dropoffSmsCode || loading) && styles.submitButtonDisabled]}
                           onPress={() => {
-                            if (recipientCode) {
-                              handleCodeVerification(recipientCode, 'dropoff', 'recipient_code');
+                            if (dropoffSmsCode) {
+                              handleSMSVerification(dropoffSmsCode, 'dropoff', 'dropoff_sms');
                             }
                           }}
-                          disabled={!recipientCode || loading}
+                          disabled={!dropoffSmsCode || loading}
                         >
-                          <Text style={[styles.submitButtonText, (!recipientCode || loading) && styles.submitButtonTextDisabled]}>
+                          <Text style={[styles.submitButtonText, (!dropoffSmsCode || loading) && styles.submitButtonTextDisabled]}>
                             {loading ? 'Verifying...' : 'Submit'}
                           </Text>
                         </TouchableOpacity>
                       </View>
                     )}
                     
-                    {step.id === 'delivery_image' && !step.completed && (
+                    {step.id === 'dropoff_image' && !step.completed && (
                       <View style={styles.imageUploadContainer}>
+                        <Text style={styles.imageInstructions}>
+                          Take a photo of the delivered package at drop-off location
+                        </Text>
                         {deliveryImage ? (
                           <View style={styles.imagePreview}>
                             <Image source={{ uri: deliveryImage }} style={styles.previewImage} />
                             <TouchableOpacity 
                               style={styles.confirmButton}
-                              onPress={() => handleStepAction('delivery_image', { image: deliveryImage })}
+                              onPress={() => handleStepAction('dropoff_image', { image: deliveryImage })}
+                              disabled={isUploadingImage}
                             >
-                              <Text style={styles.confirmButtonText}>Confirm</Text>
+                              <Text style={styles.confirmButtonText}>
+                                {isUploadingImage ? 'Uploading...' : 'Complete Delivery'}
+                              </Text>
                             </TouchableOpacity>
                           </View>
                         ) : (
                           <TouchableOpacity 
                             style={styles.uploadButton}
-                            onPress={() => handleImageUpload('delivery')}
+                            onPress={() => handleImageUpload('dropoff')}
+                            disabled={isUploadingImage}
                           >
                             <Camera size={20} color={Colors.light.primary} />
-                            <Text style={styles.uploadButtonText}>Take Photo</Text>
+                            <Text style={styles.uploadButtonText}>
+                              {isUploadingImage ? 'Processing...' : 'Take Delivery Photo'}
+                            </Text>
                           </TouchableOpacity>
                         )}
                       </View>
@@ -367,8 +431,54 @@ const styles = StyleSheet.create({
   stepTitleDisabled: {
     color: Colors.light.placeholder,
   },
+  stepDescription: {
+    fontFamily: FONT.regular,
+    fontSize: FONT_SIZE.sm,
+    color: Colors.light.placeholder,
+    marginBottom: SPACING.sm,
+    fontStyle: 'italic',
+    lineHeight: 18,
+  },
+  stepDescriptionDisabled: {
+    color: Colors.light.disabled,
+  },
   stepActions: {
     marginTop: SPACING.xs,
+  },
+  smsHeader: {
+    marginBottom: SPACING.md,
+  },
+  smsInstructions: {
+    fontFamily: FONT.regular,
+    fontSize: FONT_SIZE.sm,
+    color: Colors.light.text,
+    marginBottom: SPACING.sm,
+    textAlign: 'center',
+  },
+  resendButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+    backgroundColor: `${Colors.light.primary}10`,
+    borderRadius: BORDER_RADIUS.sm,
+    borderWidth: 1,
+    borderColor: Colors.light.primary,
+    gap: SPACING.xs,
+  },
+  resendButtonText: {
+    fontFamily: FONT.medium,
+    fontSize: FONT_SIZE.sm,
+    color: Colors.light.primary,
+  },
+  imageInstructions: {
+    fontFamily: FONT.regular,
+    fontSize: FONT_SIZE.sm,
+    color: Colors.light.text,
+    textAlign: 'center',
+    marginBottom: SPACING.md,
+    fontStyle: 'italic',
   },
   doneButton: {
     alignSelf: 'flex-end',
@@ -386,9 +496,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: SPACING.sm,
+    flexWrap: 'wrap',
   },
   codeInput: {
     flex: 1,
+    minWidth: 120,
     borderWidth: 1,
     borderColor: Colors.light.border,
     borderRadius: BORDER_RADIUS.sm,
@@ -397,12 +509,15 @@ const styles = StyleSheet.create({
     fontFamily: FONT.regular,
     fontSize: FONT_SIZE.md,
     color: Colors.light.text,
+    textAlign: 'center',
+    letterSpacing: 2,
   },
   submitButton: {
     backgroundColor: Colors.light.primary,
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.xs,
     borderRadius: BORDER_RADIUS.sm,
+    minWidth: 80,
   },
   submitButtonDisabled: {
     backgroundColor: Colors.light.disabled,
@@ -417,6 +532,7 @@ const styles = StyleSheet.create({
   },
   imageUploadContainer: {
     marginTop: SPACING.xs,
+    alignItems: 'center',
   },
   uploadButton: {
     flexDirection: 'row',
@@ -428,32 +544,35 @@ const styles = StyleSheet.create({
     borderRadius: BORDER_RADIUS.md,
     paddingVertical: SPACING.lg,
     paddingHorizontal: SPACING.md,
+    minHeight: 60,
+    gap: SPACING.sm,
   },
   uploadButtonText: {
     fontFamily: FONT.medium,
     fontSize: FONT_SIZE.sm,
     color: Colors.light.primary,
-    marginLeft: SPACING.xs,
   },
   imagePreview: {
     alignItems: 'center',
+    gap: SPACING.sm,
   },
   previewImage: {
-    width: 120,
-    height: 80,
+    width: 200,
+    height: 150,
     borderRadius: BORDER_RADIUS.sm,
-    marginBottom: SPACING.sm,
   },
   confirmButton: {
     backgroundColor: Colors.light.success,
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.xs,
     borderRadius: BORDER_RADIUS.sm,
+    minWidth: 120,
   },
   confirmButtonText: {
     fontFamily: FONT.medium,
     fontSize: FONT_SIZE.sm,
     color: Colors.light.background,
+    textAlign: 'center',
   },
   completionContainer: {
     backgroundColor: Colors.light.card,

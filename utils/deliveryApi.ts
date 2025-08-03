@@ -515,6 +515,21 @@ export const verifyDeliveryCode = async (deliveryId: string, code: string, type:
     return response.data.verified;
   } catch (error) {
     console.warn('API unavailable, using mock data for code verification:', error);
-    return code.length === 5; // Mock verification - any 5-digit code is valid
+    return code.length === 6; // Mock verification - any 6-digit code is valid
+  }
+};
+
+export const sendSMSVerificationCode = async (deliveryId: string, type: 'pickup' | 'dropoff', phoneNumber: string): Promise<void> => {
+  try {
+    const response = await apiClient.post('/deliveries/send-sms-code', {
+      deliveryId,
+      type,
+      phoneNumber,
+    });
+    return response.data;
+  } catch (error) {
+    console.warn('API unavailable, using mock data for SMS sending:', error);
+    // Mock SMS sending - just log the action
+    console.log(`Mock SMS sent to ${phoneNumber} for ${type} verification of delivery ${deliveryId}`);
   }
 };

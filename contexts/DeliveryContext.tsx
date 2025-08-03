@@ -53,6 +53,7 @@ interface DeliveryContextType {
   uploadImage: (deliveryId: string, imageUri: string, type: 'pickup' | 'dropoff') => Promise<void>;
   verifyCode: (deliveryId: string, code: string, type: 'pickup' | 'dropoff') => Promise<boolean>;
   updatePaymentStatus: (deliveryId: string, status: 'pending' | 'completed' | 'failed') => void;
+  sendSMSCode: (deliveryId: string, type: 'pickup' | 'dropoff') => Promise<void>;
 }
 
 const DeliveryContext = createContext<DeliveryContextType | undefined>(undefined);
@@ -680,6 +681,34 @@ export function DeliveryProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const sendSMSCode = async (deliveryId: string, type: 'pickup' | 'dropoff'): Promise<void> => {
+    setLoading(true);
+    setError(null);
+    try {
+      // In a real implementation, this would call your SMS API
+      await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API call
+      
+      // Mock SMS sending logic
+      const delivery = getDeliveryById(deliveryId);
+      if (!delivery) throw new Error('Delivery not found');
+      
+      const phoneNumber = type === 'pickup' 
+        ? '+254712345678' // Courier's phone (should come from user context)
+        : delivery.ClientDetails?.phone || '+254712345679'; // Recipient's phone
+      
+      console.log(`SMS sent to ${phoneNumber} for ${type} verification`);
+      
+      // In real implementation, you would call:
+      // await apiClient.post(`/deliveries/${deliveryId}/send-sms`, { type, phoneNumber });
+      
+    } catch (err) {
+      setError('Failed to send SMS code');
+      console.error('Error sending SMS code:', err);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
   const getDeliveryById = (id: string): DeliveryRequest | null => {
     return [...allDeliveries, ...pendingOngoingDeliveries, ...smeDeliveries].find(d => d.id === id) || null;
   };
@@ -706,6 +735,7 @@ export function DeliveryProvider({ children }: { children: ReactNode }) {
       uploadImage,
       verifyCode,
       updatePaymentStatus,
+      sendSMSCode,
     }}>
       {children}
     </DeliveryContext.Provider>

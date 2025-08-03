@@ -141,24 +141,22 @@ export default function CourierHomeScreen() {
       const tracker = currentDelivery.tracker;
       let step = 0;
       
-      if (tracker.pickup === 'completed') step = 1;
-      if (tracker.pickupCode) step = 2;
-      if (tracker.pickupImage) step = 3;
-      if (tracker.dropoff === 'completed') step = 4;
-      if (tracker.dropoffCode) step = 5;
-      if (tracker.dropoffImage) step = 6;
+      if (tracker.pickupCode) step = 1;
+      if (tracker.pickupImage && tracker.pickup === 'completed') step = 2;
+      if (tracker.dropoffCode) step = 3;
+      if (tracker.dropoffImage && tracker.dropoff === 'completed') step = 4;
       
       setCurrentStep(step);
-      setIsDeliveryCompleted(step === 6);
+      setIsDeliveryCompleted(step === 4);
     }
   }, [currentDelivery]);
 
   useEffect(() => {
     if (!currentDelivery) return;
 
-    if (currentStep >= 5) {
+    if (currentStep >= 3) {
       snapToPosition(SNAP_POINTS.FULL);
-    } else if (currentStep >= 3) {
+    } else if (currentStep >= 2) {
       snapToPosition(SNAP_POINTS.EXPANDED);
     } else if (currentStep >= 1) {
       snapToPosition(SNAP_POINTS.PARTIAL);
@@ -301,23 +299,21 @@ export default function CourierHomeScreen() {
     const deliveryId = currentDelivery.id;
     
     switch (stepId) {
-      case 'pickup_done':
-        updateDeliveryTracker(deliveryId, { pickup: 'completed' });
-        break;
-      case 'sms_code':
+      case 'pickup_sms':
         updateDeliveryTracker(deliveryId, { pickupCode: data.code });
         break;
       case 'pickup_image':
         updateDeliveryTracker(deliveryId, { pickupImage: data.image });
+        // Mark pickup as completed after photo is taken
+        updateDeliveryTracker(deliveryId, { pickup: 'completed' });
         break;
-      case 'dropoff_done':
-        updateDeliveryTracker(deliveryId, { dropoff: 'completed' });
-        break;
-      case 'recipient_code':
+      case 'dropoff_sms':
         updateDeliveryTracker(deliveryId, { dropoffCode: data.code });
         break;
-      case 'delivery_image':
+      case 'dropoff_image':
         updateDeliveryTracker(deliveryId, { dropoffImage: data.image });
+        // Mark dropoff as completed after photo is taken
+        updateDeliveryTracker(deliveryId, { dropoff: 'completed' });
         // Complete the delivery when all steps are done
         setTimeout(() => {
           completeDelivery(deliveryId);
@@ -606,6 +602,7 @@ export default function CourierHomeScreen() {
                 currentStep={currentStep}
                 isCompleted={isDeliveryCompleted}
                 deliveryId={currentDelivery?.id}
+                deliveryData={currentDelivery}
               />
             </ScrollView>
           </Animated.View>
