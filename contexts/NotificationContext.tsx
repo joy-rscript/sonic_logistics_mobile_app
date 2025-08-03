@@ -105,3 +105,35 @@ export function useNotifications() {
   }
   return context;
 }
+
+// Hook for type-specific notifications
+export function useNotificationsByType(type: 'delivery' | 'map' | 'messaging' | 'profile') {
+  const { notifications, markAsRead, refreshNotifications, loading, error } = useNotifications();
+  
+  // Filter notifications by type or context
+  const filteredNotifications = notifications.filter(notification => {
+    switch (type) {
+      case 'delivery':
+        return notification.type === 'delivery';
+      case 'map':
+        return notification.type === 'update' || notification.type === 'delivery';
+      case 'messaging':
+        return notification.type === 'delivery'; // Messages related to deliveries
+      case 'profile':
+        return notification.type === 'system';
+      default:
+        return true;
+    }
+  });
+
+  const unreadCount = filteredNotifications.filter(n => !n.read).length;
+
+  return {
+    notifications: filteredNotifications,
+    unreadCount,
+    markAsRead,
+    refreshNotifications,
+    loading,
+    error,
+  };
+}

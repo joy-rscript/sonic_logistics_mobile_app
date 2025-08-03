@@ -1,20 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { StyleSheet,Text,
-  View,
-  SafeAreaView,
-  ScrollView,
-  TouchableOpacity,
-  FlatList,
-  Platform,
-  Keyboard,
-  KeyboardAvoidingView,
-  Animated,
-  PanResponder,
-  Dimensions,
-  Switch
+import { 
+  StyleSheet, Text, View, SafeAreaView, ScrollView, TouchableOpacity, 
+  FlatList 
 } from 'react-native';
 import { router } from 'expo-router';
-import MapView, { Marker } from 'react-native-maps';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Bell, ChevronRight, MapPin, Clock, Package, Navigation } from 'lucide-react-native';
 import Colors from '@/constants/Colors';
@@ -22,20 +11,8 @@ import { SPACING, FONT, FONT_SIZE, BORDER_RADIUS, SHADOWS } from '@/constants/Th
 import { CircleUser as UserCircle, Truck } from 'lucide-react-native';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
-import { DeliveryStepper } from '@/components/ui/DeliveryStepper';
-import * as Location from 'expo-location';
 import { useDelivery } from '@/contexts/DeliveryContext';
 import { useNotifications } from '@/contexts/NotificationContext';
-
-const { height: screenHeight, width: screenWidth } = Dimensions.get('window');
-
-// Constants for bottom sheet snap points
-const SNAP_POINTS = {
-  COLLAPSED: screenHeight * 0.2,
-  PARTIAL: screenHeight * 0.5,
-  EXPANDED: screenHeight * 0.75,
-  FULL: screenHeight * 0.9
-};
 import { NotificationPanel } from '@/components/ui/NotificationPanel';
 
 const NotificationBell = ({ hasUnread, onPress }: { hasUnread: boolean; onPress: () => void }) => (
@@ -50,37 +27,13 @@ const NotificationBell = ({ hasUnread, onPress }: { hasUnread: boolean; onPress:
 );
 
 export default function CourierHomeScreen() {
-  const isSME = true;
-
-  // if (isSME) {
-  //    router.replace('/(app)/(sme_tabs)' as any);
-  //   return null;
-  // }
-  const [mapRegion, setMapRegion] = useState({
-    latitude: 0,
-    longitude: 0,
-    latitudeDelta: 0.0422,
-    longitudeDelta: 0.0421,
-  });
-  
-  const [keyboardVisible, setKeyboardVisible] = useState(false);
-  const [bottomSheetHeight, setBottomSheetHeight] = useState(SNAP_POINTS.COLLAPSED);
-  const scrollViewRef = useRef<ScrollView>(null);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showNotificationPanel, setShowNotificationPanel] = useState(false);
   const [showInstructions, setShowInstructions] = useState(false);
-  const [isDeliveryCompleted, setIsDeliveryCompleted] = useState(false);
-  const [currentStep, setCurrentStep] = useState(0);
-  const [navigationEnabled, setNavigationEnabled] = useState(true);
-
 
   const { 
     allDeliveries, 
-    currentDelivery, 
     acceptDelivery,
-    updateDeliveryTracker,
-    completeDelivery,
-    createNewDelivery,
     loading: deliveryLoading,
     error: deliveryError,
     refreshDeliveries
@@ -95,195 +48,13 @@ export default function CourierHomeScreen() {
 
   const [selectedDelivery, setSelectedDelivery] = useState(
     allDeliveries.length > 0 ? allDeliveries[0] : null
-  );
-
-  // Bottom sheet animation
-  const bottomSheetAnim = useRef(new Animated.Value(SNAP_POINTS.COLLAPSED)).current;
-  const panY = useRef(new Animated.Value(0)).current;
-
-  // current location to display on map based on delivery status
-  const getCurrentMapLocation = () => {
-    if (!currentDelivery) return null;
-    
-    const { tracker } = currentDelivery;
-    
-    // If pickup is pending, show pickup location
-    if (!tracker || tracker.pickup === 'pending') {
-      return {
-        coordinates: currentDelivery.pickupCord,
-        address: currentDelivery.pickup,
-        type: 'pickup'
-      };
-    }
-    
-    // If pickup is completed but dropoff is pending, show dropoff location
-    if (tracker.pickup === 'completed' && tracker.dropoff === 'pending') {
-      return {
-        coordinates: currentDelivery.dropoffCord,
-        address: currentDelivery.dropoff,
-        type: 'dropoff'
-      };
-    }
-    
-    // Default to dropoff location
-    return {
-      coordinates: currentDelivery.dropoffCord,
-      address: currentDelivery.dropoff,
-      type: 'dropoff'
-    };
-  };
-
-  const currentMapLocation = getCurrentMapLocation();
-
-  //current step based on delivery tracker
-  useEffect(() => {
-    if (currentDelivery?.tracker) {
-      const tracker = currentDelivery.tracker;
-      let step = 0;
-      
-      if (tracker.pickupCode) step = 1;
-      if (tracker.pickupImage && tracker.pickup === 'completed') step = 2;
-      if (tracker.dropoffCode) step = 3;
-      if (tracker.dropoffImage && tracker.dropoff === 'completed') step = 4;
-      
-      setCurrentStep(step);
-      setIsDeliveryCompleted(step === 4);
-    }
-  }, [currentDelivery]);
-
-  useEffect(() => {
-    if (!currentDelivery) return;
-
-    if (currentStep >= 3) {
-      snapToPosition(SNAP_POINTS.FULL);
-    } else if (currentStep >= 2) {
-      snapToPosition(SNAP_POINTS.EXPANDED);
-    } else if (currentStep >= 1) {
-      snapToPosition(SNAP_POINTS.PARTIAL);
-    } else {
-      snapToPosition(SNAP_POINTS.COLLAPSED);
-    }
   }, [currentStep, currentDelivery]);
 
   // Set up location and keyboard listeners
   useEffect(() => {
     // Refresh data when component mounts
-    refreshDeliveries();
-    refreshNotifications();
-
-    const getPermissions = async () => {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status === 'granted') console.log('Permission granted');
-    };
-
-    const getCurrentLocation = async () => {
-      let { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        console.error('Permission to access location was denied');
-        return;
-      }
-
-      let location = await Location.getCurrentPositionAsync({});
-      setMapRegion({
-        latitude: location.coords.latitude,
-        longitude: location.coords.longitude,
-        latitudeDelta: 0.0422,
-        longitudeDelta: 0.0421,
-      });
-    };
-
-    getCurrentLocation();
-    getPermissions();
-
-    // Set up keyboard listeners
-    const keyboardDidShowListener = Keyboard.addListener(
-      'keyboardDidShow',
-      () => {
-        setKeyboardVisible(true);
-        // Expand the bottom sheet when keyboard appears
-        snapToPosition(SNAP_POINTS.EXPANDED);
-      }
-    );
-    
-    const keyboardDidHideListener = Keyboard.addListener(
-      'keyboardDidHide',
-      () => {
-        setKeyboardVisible(false);
-        // Return to previous position when keyboard hides
-        snapToPosition(SNAP_POINTS.PARTIAL);
-      }
-    );
-
-    // Clean up listeners
-    return () => {
-      keyboardDidShowListener.remove();
       keyboardDidHideListener.remove();
     };
-  }, []);
-
-  // Function to snap bottom sheet to a specific position
-  const snapToPosition = (position: number) => {
-    setBottomSheetHeight(position);
-    Animated.spring(bottomSheetAnim, {
-      toValue: position,
-      useNativeDriver: false,
-      friction: 8,
-      tension: 40
-    }).start();
-  };
-
-  // Pan responder for bottom sheet dragging
-  const panResponder = PanResponder.create({
-    onMoveShouldSetPanResponder: (_, gestureState) => {
-      return Math.abs(gestureState.dy) > 10;
-    },
-    onPanResponderMove: (_, gestureState) => {
-      // Limit the drag to screen size
-      const dy = gestureState.dy;
-      if (
-        bottomSheetHeight + dy >= SNAP_POINTS.COLLAPSED &&
-        bottomSheetHeight + dy <= SNAP_POINTS.FULL
-      ) {
-        panY.setValue(dy);
-      }
-
-    },
-
-    onPanResponderRelease: (_, gestureState) => {
-      const currentHeight = bottomSheetHeight + gestureState.dy;
-
-      let targetSnapPoint = SNAP_POINTS.PARTIAL;
-
-      if (gestureState.vy > 0.5) {
-        targetSnapPoint = SNAP_POINTS.COLLAPSED;
-      } else if (gestureState.vy < -0.5) {
-        targetSnapPoint = SNAP_POINTS.EXPANDED;
-      } else if (currentHeight < (SNAP_POINTS.COLLAPSED + SNAP_POINTS.PARTIAL) / 2) {
-        targetSnapPoint = SNAP_POINTS.COLLAPSED;
-      } else if (currentHeight < (SNAP_POINTS.PARTIAL + SNAP_POINTS.EXPANDED) / 2) {
-        targetSnapPoint = SNAP_POINTS.PARTIAL;
-      } else {
-        targetSnapPoint = SNAP_POINTS.EXPANDED;
-      }
-
-      setBottomSheetHeight(targetSnapPoint);
-
-      Animated.parallel([
-        Animated.spring(bottomSheetAnim, {
-          toValue: targetSnapPoint,
-          useNativeDriver: false,
-          friction: 8,
-          tension: 40,
-        }),
-        Animated.spring(panY, {
-          toValue: 0,
-          useNativeDriver: false,
-        }),
-      ]).start();
-
-    },
-  });
-
   const handleNotificationRead = (id: string) => {
     markAsRead(id);
   };
@@ -291,37 +62,6 @@ export default function CourierHomeScreen() {
   const handleAcceptDelivery = (requestId: string) => {
     acceptDelivery(requestId);
     router.replace('/(app)/(courier_tabs)/deliveries');
-  };
-
-  const handleStepComplete = (stepId: string, data?: any) => {
-    if (!currentDelivery) return;
-
-    const deliveryId = currentDelivery.id;
-    
-    switch (stepId) {
-      case 'pickup_sms':
-        updateDeliveryTracker(deliveryId, { pickupCode: data.code });
-        break;
-      case 'pickup_image':
-        updateDeliveryTracker(deliveryId, { pickupImage: data.image });
-        // Mark pickup as completed after photo is taken
-        updateDeliveryTracker(deliveryId, { pickup: 'completed' });
-        break;
-      case 'dropoff_sms':
-        updateDeliveryTracker(deliveryId, { dropoffCode: data.code });
-        break;
-      case 'dropoff_image':
-        updateDeliveryTracker(deliveryId, { dropoffImage: data.image });
-        // Mark dropoff as completed after photo is taken
-        updateDeliveryTracker(deliveryId, { dropoff: 'completed' });
-        // Complete the delivery when all steps are done
-        setTimeout(() => {
-          completeDelivery(deliveryId);
-          setIsDeliveryCompleted(false);
-          setCurrentStep(0);
-        }, 2000);
-        break;
-    }
   };
 
   const getBadgeVariant = (badge: string) => {
@@ -343,272 +83,193 @@ export default function CourierHomeScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      {!currentDelivery || navigationEnabled? (
-        // Show available deliveries when no current delivery
-        <View>
-          <View style={styles.header}>
-            <View>
-              <Text style={styles.greeting}>Hi Martin,</Text>
-              <Text style={styles.subGreeting}>Ready for deliveries?</Text>
-            </View>
-            <TouchableOpacity onPress={() => setShowNotifications(prev => !prev)} style={styles.notificationButton}>
-              <Bell size={24} color={Colors.light.text} />
-              {unreadCount > 0 && (
-                <View style={styles.notificationBadge}>
-                  <Text style={styles.notificationBadgeText}>{unreadCount}</Text>
-                </View>
-              )}
-            </TouchableOpacity>
+      <ScrollView contentContainerStyle={styles.scrollContent}>
+        <View style={styles.header}>
+          <View>
+            <Text style={styles.greeting}>Hi Martin,</Text>
+            <Text style={styles.subGreeting}>Ready for deliveries?</Text>
           </View>
-
-          {showNotifications && (
-            <View style={styles.notificationsOverlay}>
-              <Text style={styles.sectionTitle}>Notifications</Text>
-              {deliveryLoading && (
-                <Text style={styles.loadingText}>Loading notifications...</Text>
-              )}
-              {deliveryError && (
-                <Text style={styles.errorText}>{deliveryError}</Text>
-              )}
-              {notifications.map(notification => (
-                <TouchableOpacity 
-                  key={notification.id} 
-                  style={[styles.notificationCard, notification.read && styles.notificationCardRead]}
-                  onPress={() => handleNotificationRead(notification.id)}
-                >
-                  <View style={[styles.notificationIcon, { backgroundColor: notification.type === 'system' ? '#4CAF50' : notification.type === 'update' ? '#2196F3' : '#FFC107' }]}>
-                    <Text style={styles.notificationIconText}>
-                      {notification.type === 'system' ? 'S' : notification.type === 'update' ? 'U' : 'D'}
-                    </Text>
-                  </View>
-                  <View style={styles.notificationContent}>
-                    <Text style={styles.notificationTitle}>{notification.title}</Text>
-                    <Text style={styles.notificationMessage} numberOfLines={2}>
-                      {notification.message}
-                    </Text>
-                  </View>
-                  {!notification.read && <View style={styles.unreadIndicator} />}
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
-
-          {!showNotifications && allDeliveries.length > 0 ? (
-            <View style={styles.deliveriesSection}>
-              <Text style={styles.sectionTitle}>Available Deliveries</Text>
-              
-              <FlatList
-                data={allDeliveries}
-                horizontal
-                snapToInterval={320}
-                decelerationRate="fast"
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.horizontalListContainer}
-                onMomentumScrollEnd={({ nativeEvent }) => {
-                  const index = Math.round(nativeEvent.contentOffset.x / 320);
-                  if (allDeliveries[index]) {
-                    setSelectedDelivery(allDeliveries[index]);
-                  }
-                }}
-                renderItem={({ item }) => (
-                  <TouchableOpacity onPress={() => setSelectedDelivery(item)}>
-                    <Card style={[
-                      styles.horizontalCard,
-                      selectedDelivery?.id === item.id && styles.selectedCard
-                    ]}>
-                      {/* Delivery Details */}
-                      <View style={styles.deliveryHeading}>
-                        <View style={styles.iconTextRow}>
-                          <MaterialIcons name="local-shipping" size={26} color={Colors.light.placeholder}/>
-                          <Text style={styles.deliveryLocation}>Package in: {item.location.slice(0, 6)}</Text>
-                        </View>
-                        <Badge label={`KSh ${item.price}`} variant="primary" />
-                      </View>
-                      {/* Client Info */}
-                      <View style={styles.clientSection}>
-                        <View>
-                          <UserCircle size={26} color={Colors.light.placeholder} />
-                        </View>
-                        <View style={styles.textColumn}>
-                          <Text style={styles.clientName}>{item.clientName}</Text>
-                          <Text style={styles.clientRole}>{item.clientType}</Text>
-                        </View>
-                      </View>
-
-                      <View style={styles.estimateRow}>
-                        <Clock size={16} color={Colors.light.placeholder} />
-                        <Text style={styles.estimateText}>{item.estimate.split('|')[1]?.trim() || '2hrs'}</Text>
-                      </View>
-                    </Card>
-                  </TouchableOpacity>
-                )}      
-              />
-
-              {selectedDelivery && (
-                <Card style={styles.detailedCard}>
-                  <Text style={styles.detailsTitle}>Request Details</Text>
-                  
-                  <View style={styles.badgeContainer}>
-                    {selectedDelivery.badges.map((badge, i) => (
-                      <Badge 
-                        key={i} 
-                        label={badge} 
-                        variant={getBadgeVariant(badge) as any}
-                        style={styles.detailBadge}
-                      />
-                    ))}
-                  </View>
-
-                  <View style={styles.locationSection}>
-                    <View style={styles.locationRow}>
-                      <View style={styles.locationDot} />
-                      <View style={styles.locationInfo}>
-                        <Text style={styles.locationLabel}>Pickup</Text>
-                        <Text style={styles.locationAddress}>{selectedDelivery.pickup}</Text>
-                        <Text style={styles.coordinatesText}>
-                          {selectedDelivery.pickupCord.latitude.toFixed(4)}, {selectedDelivery.pickupCord.longitude.toFixed(4)}
-                        </Text>
-                      </View>
-                    </View>
-
-                    <View style={styles.locationLine} />
-
-                    <View style={styles.locationRow}>
-                      <View style={[styles.locationDot, styles.destinationDot]} />
-                      <View style={styles.locationInfo}>
-                        <Text style={styles.locationLabel}>Drop Off</Text>
-                        <Text style={styles.locationAddress}>{selectedDelivery.dropoff}</Text>
-                        <Text style={styles.coordinatesText}>
-                          {selectedDelivery.dropoffCord.latitude.toFixed(4)}, {selectedDelivery.dropoffCord.longitude.toFixed(4)}
-                        </Text>
-                      </View>
-                    </View>
-                  </View>
-
-                  <View style={styles.estimateContainer}>
-                    <Clock size={16} color={Colors.light.placeholder} />
-                    <Text style={styles.estimateDetailText}>{selectedDelivery.estimate}</Text>
-                  </View>
-
-                  {selectedDelivery.instructions && (
-                    <TouchableOpacity
-                      onPress={() => setShowInstructions(prev => !prev)}
-                      style={styles.instructionsToggle}
-                    >
-                      <Text style={styles.instructionsToggleText}>
-                        {showInstructions ? 'Hide Instructions' : 'View Instructions & Map'}
-                      </Text>
-                      <ChevronRight 
-                        size={16} 
-                        color={Colors.light.primary}
-                        style={{ transform: [{ rotate: showInstructions ? '90deg' : '0deg' }] }}
-                      />
-                    </TouchableOpacity>
-                  )}
-
-                  {showInstructions && selectedDelivery.instructions && (
-                    <View style={styles.instructionsContainer}>
-                      <Text style={styles.instructionsText}>{selectedDelivery.instructions}</Text>
-                    </View>
-                  )}
-
-                  <TouchableOpacity 
-                    style={styles.acceptButton}
-                    onPress={() => handleAcceptDelivery(selectedDelivery.id)}
-                  >
-                    <Text style={styles.acceptButtonText}>Accept Delivery</Text>
-                  </TouchableOpacity>
-                </Card>
-              )}
-            </View>
-          ) : (
-            <NotificationBell 
-              hasUnread={unreadCount > 0}
-              onPress={() => setShowNotificationPanel(true)}
-            />
-          )}
+          <TouchableOpacity onPress={() => setShowNotifications(prev => !prev)} style={styles.notificationButton}>
+            <Bell size={24} color={Colors.light.text} />
+            {unreadCount > 0 && (
+              <View style={styles.notificationBadge}>
+                <Text style={styles.notificationBadgeText}>{unreadCount}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
         </View>
-      ) : (
-        // Show map and delivery stepper when there's a current delivery
-        <KeyboardAvoidingView 
-          style={styles.mapContainer}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
-        >
-          {/* Map View */}
-          {currentMapLocation ? (
-            <MapView
-              style={styles.map}
-              region={currentMapLocation.coordinates}
-              provider="google"
-            >
-              <Marker
-                coordinate={currentMapLocation.coordinates}
-                title={currentMapLocation.type === 'pickup' ? 'Pickup Location' : 'Dropoff Location'}
-                description={currentMapLocation.address}
-              />
-            </MapView>
-          ) : (
-            <MapView
-              style={styles.map}
-              region={mapRegion}
-              provider="google"
-            />
-          )}
-          <View style={styles.mapHeader}>
-            <View style={styles.mapHeaderLeft}>
-              <Text style={styles.mapHeaderTitle}>Current Delivery</Text>
-            </View>
 
-            <View style={styles.mapHeaderRight}>
-              <Text style={styles.mapHeaderText}>Route</Text>
-              <Switch
-                value={navigationEnabled}
-                onValueChange={setNavigationEnabled}
-                // thumbColor={navigationEnabled ? Colors.light.primary : Colors.light.disabled}
-              />
-            </View>
+        {showNotifications && (
+          <View style={styles.notificationsOverlay}>
+            <Text style={styles.sectionTitle}>Notifications</Text>
+            {deliveryLoading && (
+              <Text style={styles.loadingText}>Loading notifications...</Text>
+            )}
+            {deliveryError && (
+              <Text style={styles.errorText}>{deliveryError}</Text>
+            )}
+            {notifications.map(notification => (
+              <TouchableOpacity 
+                key={notification.id} 
+                style={[styles.notificationCard, notification.read && styles.notificationCardRead]}
+                onPress={() => handleNotificationRead(notification.id)}
+              >
+                <View style={[styles.notificationIcon, { backgroundColor: notification.type === 'system' ? '#4CAF50' : notification.type === 'update' ? '#2196F3' : '#FFC107' }]}>
+                  <Text style={styles.notificationIconText}>
+                    {notification.type === 'system' ? 'S' : notification.type === 'update' ? 'U' : 'D'}
+                  </Text>
+                </View>
+                <View style={styles.notificationContent}>
+                  <Text style={styles.notificationTitle}>{notification.title}</Text>
+                  <Text style={styles.notificationMessage} numberOfLines={2}>
+                    {notification.message}
+                  </Text>
+                </View>
+                {!notification.read && <View style={styles.unreadIndicator} />}
+              </TouchableOpacity>
+            ))}
           </View>
+        )}
 
+        {!showNotifications && allDeliveries.length > 0 ? (
+          <View style={styles.deliveriesSection}>
+            <Text style={styles.sectionTitle}>Available Deliveries</Text>
+            
+            <FlatList
+              data={allDeliveries}
+              horizontal
+              snapToInterval={320}
+              decelerationRate="fast"
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.horizontalListContainer}
+              onMomentumScrollEnd={({ nativeEvent }) => {
+                const index = Math.round(nativeEvent.contentOffset.x / 320);
+                if (allDeliveries[index]) {
+                  setSelectedDelivery(allDeliveries[index]);
+                }
+              }}
+              renderItem={({ item }) => (
+                <TouchableOpacity onPress={() => setSelectedDelivery(item)}>
+                  <Card style={[
+                    styles.horizontalCard,
+                    selectedDelivery?.id === item.id && styles.selectedCard
+                  ]}>
+                    {/* Delivery Details */}
+                    <View style={styles.deliveryHeading}>
+                      <View style={styles.iconTextRow}>
+                        <MaterialIcons name="local-shipping" size={26} color={Colors.light.placeholder}/>
+                        <Text style={styles.deliveryLocation}>Package in: {item.location.slice(0, 6)}</Text>
+                      </View>
+                      <Badge label={`KSh ${item.price}`} variant="primary" />
+                    </View>
+                    {/* Client Info */}
+                    <View style={styles.clientSection}>
+                      <View>
+                        <UserCircle size={26} color={Colors.light.placeholder} />
+                      </View>
+                      <View style={styles.textColumn}>
+                        <Text style={styles.clientName}>{item.clientName}</Text>
+                        <Text style={styles.clientRole}>{item.clientType}</Text>
+                      </View>
+                    </View>
 
+                    <View style={styles.estimateRow}>
+                      <Clock size={16} color={Colors.light.placeholder} />
+                      <Text style={styles.estimateText}>{item.estimate.split('|')[1]?.trim() || '2hrs'}</Text>
+                    </View>
+                  </Card>
+                </TouchableOpacity>
+              )}      
+            />
 
-          {/* Bottom Sheet with Stepper */}
-          <Animated.View
-            style={[
-              styles.bottomSheet,
-              {
-                height: bottomSheetAnim,
-                transform: [{ translateY: panY }],
-                zIndex: 1, 
-              },
-            ]}
-            {...panResponder.panHandlers}
-          >
-            <View style={styles.dragHandle} />
-            <Text style={styles.sectionTitle}>Delivery Progress</Text>            
-            <ScrollView 
-              ref={scrollViewRef}
-              style={styles.bottomSheetContent}
-              showsVerticalScrollIndicator={false}
-              bounces={false}
-              keyboardShouldPersistTaps="never"
-              contentContainerStyle={[
-                styles.bottomSheetContentContainer,
-                keyboardVisible && { paddingBottom: 200 }
-              ]}
-            >
-              <DeliveryStepper 
-                onStepComplete={handleStepComplete}
-                currentStep={currentStep}
-                isCompleted={isDeliveryCompleted}
-                deliveryId={currentDelivery?.id}
-                deliveryData={currentDelivery}
-              />
-            </ScrollView>
-          </Animated.View>
-        </KeyboardAvoidingView>
-      )}
-      
+            {selectedDelivery && (
+              <Card style={styles.detailedCard}>
+                <Text style={styles.detailsTitle}>Request Details</Text>
+                
+                <View style={styles.badgeContainer}>
+                  {selectedDelivery.badges.map((badge, i) => (
+                    <Badge 
+                      key={i} 
+                      label={badge} 
+                      variant={getBadgeVariant(badge) as any}
+                      style={styles.detailBadge}
+                    />
+                  ))}
+                </View>
+
+                <View style={styles.locationSection}>
+                  <View style={styles.locationRow}>
+                    <View style={styles.locationDot} />
+                    <View style={styles.locationInfo}>
+                      <Text style={styles.locationLabel}>Pickup</Text>
+                      <Text style={styles.locationAddress}>{selectedDelivery.pickup}</Text>
+                      <Text style={styles.coordinatesText}>
+                        {selectedDelivery.pickupCord.latitude.toFixed(4)}, {selectedDelivery.pickupCord.longitude.toFixed(4)}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.locationLine} />
+
+                  <View style={styles.locationRow}>
+                    <View style={[styles.locationDot, styles.destinationDot]} />
+                    <View style={styles.locationInfo}>
+                      <Text style={styles.locationLabel}>Drop Off</Text>
+                      <Text style={styles.locationAddress}>{selectedDelivery.dropoff}</Text>
+                      <Text style={styles.coordinatesText}>
+                        {selectedDelivery.dropoffCord.latitude.toFixed(4)}, {selectedDelivery.dropoffCord.longitude.toFixed(4)}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+
+                <View style={styles.estimateContainer}>
+                  <Clock size={16} color={Colors.light.placeholder} />
+                  <Text style={styles.estimateDetailText}>{selectedDelivery.estimate}</Text>
+                </View>
+
+                {selectedDelivery.instructions && (
+                  <TouchableOpacity
+                    onPress={() => setShowInstructions(prev => !prev)}
+                    style={styles.instructionsToggle}
+                  >
+                    <Text style={styles.instructionsToggleText}>
+                      {showInstructions ? 'Hide Instructions' : 'View Instructions'}
+                    </Text>
+                    <ChevronRight 
+                      size={16} 
+                      color={Colors.light.primary}
+                      style={{ transform: [{ rotate: showInstructions ? '90deg' : '0deg' }] }}
+                    />
+                  </TouchableOpacity>
+                )}
+
+                {showInstructions && selectedDelivery.instructions && (
+                  <View style={styles.instructionsContainer}>
+                    <Text style={styles.instructionsText}>{selectedDelivery.instructions}</Text>
+                  </View>
+                )}
+
+                <TouchableOpacity 
+                  style={styles.acceptButton}
+                  onPress={() => handleAcceptDelivery(selectedDelivery.id)}
+                >
+                  <Text style={styles.acceptButtonText}>Accept Delivery</Text>
+                </TouchableOpacity>
+              </Card>
+            )}
+          </View>
+        ) : !showNotifications ? (
+          <View style={styles.emptyState}>
+            <Package size={64} color={Colors.light.placeholder} />
+            <Text style={styles.emptyStateTitle}>No Available Deliveries</Text>
+            <Text style={styles.emptyStateText}>
+              New delivery requests will appear here when available
+            </Text>
+          </View>
+        ) : null}
+      </ScrollView>
+
       {/* Notification Panel */}
       <NotificationPanel 
         visible={showNotificationPanel}
@@ -625,74 +286,6 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingTop: SPACING.xl,
-    paddingBottom: SPACING.xxl,
-  },
-  mapContainer: {
-    flex: 1,
-    position: 'relative',
-  },
-  map: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  mapHeader: {
-    position: 'absolute',
-    top: SPACING.lg,
-    left: SPACING.lg,
-    right: SPACING.lg,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: Colors.light.background,
-    borderRadius: BORDER_RADIUS.md,
-    padding: SPACING.md,
-    ...SHADOWS.medium,
-    zIndex: 1,
-  },
-  mapHeaderTitle: {
-    fontFamily: FONT.poppinsBold,
-    fontSize: FONT_SIZE.md,
-    color: Colors.light.text,
-  },
-  mapHeaderLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  mapHeaderRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  mapHeaderText: {
-    fontSize: 12,
-    color: Colors.light.text,
-  },
-
-  bottomSheet: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: Colors.light.background,
-    borderTopLeftRadius: BORDER_RADIUS.xl,
-    borderTopRightRadius: BORDER_RADIUS.xl,
-    ...SHADOWS.heavy,
-    zIndex: 1,
-  },
-  dragHandle: {
-    width: 40,
-    height: 4,
-    backgroundColor: Colors.light.border,
-    borderRadius: 2,
-    alignSelf: 'center',
-    marginTop: SPACING.sm,
-    marginBottom: SPACING.md,
-  },
-  bottomSheetContent: {
-    flex: 1,
-  },
-  bottomSheetContentContainer: {
-    paddingHorizontal: SPACING.lg,
     paddingBottom: SPACING.xxl,
   },
   header: {
