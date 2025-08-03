@@ -16,7 +16,7 @@ import {
   Alert
 } from 'react-native';
 import MapView, { Marker } from 'react-native-maps';
-import { ArrowLeft, Phone, MessageSquare, Navigation, MapPin, Clock, Package } from 'lucide-react-native';
+import { ArrowLeft, Phone, MessageSquare, Navigation, MapPin, Clock, Package, ChevronDown, ChevronRight } from 'lucide-react-native';
 import Colors from '@/constants/Colors';
 import { SPACING, FONT, FONT_SIZE, BORDER_RADIUS, SHADOWS } from '@/constants/Theme';
 import { Card } from '@/components/ui/Card';
@@ -39,6 +39,7 @@ const SNAP_POINTS = {
 
 export default function CourierMapScreen() {
   const [showNotificationPanel, setShowNotificationPanel] = useState(false);
+  const [showDropoffDetails, setShowDropoffDetails] = useState(false);
   const [mapRegion, setMapRegion] = useState({
     latitude: 0,
     longitude: 0,
@@ -71,6 +72,30 @@ export default function CourierMapScreen() {
   const bottomSheetAnim = useRef(new Animated.Value(SNAP_POINTS.COLLAPSED)).current;
   const panY = useRef(new Animated.Value(0)).current;
 
+  // Check if pickup is completed
+  const isPickupCompleted = currentDelivery?.tracker?.pickup === 'completed';
+
+  // Get delivery status for badge
+  const getDeliveryStatus = () => {
+    if (!currentDelivery?.tracker) return 'Pickup Pending';
+    
+    const { pickup, dropoff } = currentDelivery.tracker;
+    
+    if (dropoff === 'completed') return 'Completed';
+    if (pickup === 'completed') return 'Drop-off Pending';
+    return 'Pickup Pending';
+  };
+
+  // Get badge variant based on status
+  const getStatusBadgeVariant = () => {
+    const status = getDeliveryStatus();
+    switch (status) {
+      case 'Completed': return 'success';
+      case 'Drop-off Pending': return 'warning';
+      case 'Pickup Pending': return 'secondary';
+      default: return 'secondary';
+    }
+  };
   // Get current location to display on map based on delivery status
   const getCurrentMapLocation = () => {
     if (!currentDelivery) return null;
@@ -418,12 +443,50 @@ export default function CourierMapScreen() {
             <View style={styles.deliveryInfoHeader}>
               <Text style={styles.sectionTitle}>Delivery Progress</Text>
               <Badge 
-                label={`#${currentDelivery.id.slice(-6).toUpperCase()}`} 
-                variant="primary" 
+                label={getDeliveryStatus()} 
+                variant={getStatusBadgeVariant() as any}
                 size="small"
               />
             </View>
 
+            {/* Location Display */}
+            <View style={styles.locationDisplayContainer}>
+              {!isPickupCompleted ? (
+                <>
+                  <TouchableOpacity 
+                    style={styles.locationRow}
+                    onPress={() => setShowDropoffDetails(!showDropoffDetails)}
+                  >
+                    <Text style={styles.locationLabel}>PickUp:</Text>
+                    <Text style={styles.locationText} numberOfLines={1}>
+                      {currentDelivery.pickupLocation}
+                    </Text>
+                    <Text style={styles.expandText}>→ tap to expand</Text>
+                    {showDropoffDetails ? (
+                      <ChevronDown size={16} color={Colors.light.primary} />
+                    ) : (
+                      <ChevronRight size={16} color={Colors.light.primary} />
+                    )}
+                  </TouchableOpacity>
+                  
+                  {showDropoffDetails && (
+                    <View style={styles.locationRow}>
+                      <Text style={styles.locationLabel}>DropOff:</Text>
+                      <Text style={styles.locationText} numberOfLines={1}>
+                        {currentDelivery.dropoffLocation}
+                      </Text>
+                    </View>
+                  )}
+                </>
+              ) : (
+                <View style={styles.locationRow}>
+                  <Text style={styles.locationLabel}>DropOff:</Text>
+                  <Text style={styles.locationText} numberOfLines={1}>
+                    {currentDelivery.dropoffLocation}
+                  </Text>
+                </View>
+              )}
+            </View>
             {/* Client Info */}
             <Card style={styles.clientInfoCard}>
               <View style={styles.clientHeader}>
@@ -651,5 +714,38 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZE.sm,
     color: Colors.light.placeholder,
     marginLeft: SPACING.xs,
+  },
+  locationDisplayContainer: {
+    backgroundColor: Colors.light.card,
+    borderRadius: BORDER_RADIUS.md,
+    padding: SPACING.md,
+    marginBottom: SPACING.md,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+  },
+  locationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: SPACING.xs,
+  },
+  locationLabel: {
+    fontFamily: FONT.poppinsBold,
+    fontSize: FONT_SIZE.md,
+    color: Colors.light.text,
+    minWidth: 70,
+  },
+  locationText: {
+    fontFamily: FONT.medium,
+    fontSize: FONT_SIZE.sm,
+    color: Colors.light.text,
+    flex: 1,
+    marginLeft: SPACING.sm,
+  },
+  expandText: {
+    fontFamily: FONT.regular,
+    fontSize: FONT_SIZE.xs,
+    color: Colors.light.placeholder,
+    marginLeft: SPACING.sm,
+    fontStyle: 'italic',
   },
 });
