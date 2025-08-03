@@ -48,13 +48,19 @@ export default function CourierHomeScreen() {
 
   const [selectedDelivery, setSelectedDelivery] = useState(
     allDeliveries.length > 0 ? allDeliveries[0] : null
-  }, [currentStep, currentDelivery]);
+  );
 
   // Set up location and keyboard listeners
   useEffect(() => {
     // Refresh data when component mounts
-      keyboardDidHideListener.remove();
+    refreshDeliveries();
+    refreshNotifications();
+    
+    return () => {
+      // Cleanup if needed
     };
+  }, []);
+
   const handleNotificationRead = (id: string) => {
     markAsRead(id);
   };
