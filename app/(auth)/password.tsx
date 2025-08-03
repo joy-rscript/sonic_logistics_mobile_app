@@ -3,9 +3,12 @@ import { StyleSheet, Text, View, TouchableOpacity, ScrollView, KeyboardAvoidingV
 import { Image } from 'react-native';
 import { TextInput } from 'react-native-paper';
 import { Link, router } from 'expo-router';
+import * as SecureStore from 'expo-secure-store';
+import { Alert } from 'react-native';
 import Colors from '@/constants/Colors';
 import { SPACING, FONT, FONT_SIZE, BORDER_RADIUS } from '@/constants/Theme';
 import { Button } from '@/components/ui/Button';
+import { setPassword } from '@/utils/authApi';
 
 interface FormData {
   password: string;
@@ -17,27 +20,60 @@ export default function PasswordScreen() {
     password: '',
     confirmPassword: '',
   });
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleContinue = () => {
+  const handleContinue = async () => {
+    if (isLoading) return;
+    
     const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/;
     
     if (!passwordRegex.test(formData.password)) {
-      alert('Password does not meet requirements');
+      Alert.alert('Invalid Password', 'Password must be at least 8 characters with uppercase, lowercase, and number');
       return;
     }
 
     if (formData.password !== formData.confirmPassword) {
-      alert('Passwords do not match');
+      Alert.alert('Password Mismatch', 'Passwords do not match');
       return;
     }
 
-
-    const userRole = 'sme'; 
-    
-    if (userRole === 'sme') {
-      router.push('/(auth)/business-info');
-    } else {
-      router.push('/(auth)/vehicle-info');
+    setIsLoading(true);
+    try {
+      // Get user data from secure store
+      const userId = await SecureStore.getItemAsync('userId');
+      const userRole = await SecureStore.getItemAsync('role');
+      
+      if (!userId || !userRole) {
+        Alert.alert('Error', 'User data not found. Please register again.');
+        router.replace('/(auth)/register');
+        return;
+      }
+      
+      // Call set password API
+      const response = await setPassword({
+        userId,
+        password: formData.password,
+        confirmPassword: formData.confirmPassword,
+      });
+      
+      if (response.success) {
+        // Store password set status
+        await SecureStore.setItemAsync('passwordSet', 'true');
+        
+        // Navigate based on user role
+        if (userRole === 'sme') {
+          router.push('/(auth)/business-info');
+        } else {
+          router.push('/(auth)/vehicle-info');
+        }
+      } else {
+        Alert.alert('Password Error', response.message || 'Failed to set password');
+      }
+    } catch (error) {
+      console.error('Password setting error:', error);
+      Alert.alert('Error', 'An error occurred while setting your password');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -102,7 +138,8 @@ export default function PasswordScreen() {
           <Button
             title="Continue"
             onPress={handleContinue}
-            disabled={!isFormValid}
+            disabled={!isFormValid || isLoading}
+            loading={isLoading}
           />
         </View>
         

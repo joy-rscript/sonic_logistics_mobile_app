@@ -8,17 +8,23 @@ import {
   Animated,
   Keyboard,
   Platform,
+  Alert,
 } from "react-native";
 import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
+import * as SecureStore from "expo-secure-store";
 import Colors from "@/constants/Colors";
 import { SPACING, FONT, FONT_SIZE, BORDER_RADIUS } from "@/constants/Theme";
+import { verifyCode, resendOTP } from "@/utils/authApi";
 
 export default function OTPVerificationScreen() {
   const [otp, setOtp] = useState(["", "", "", "", "", ""]);
   const [timer, setTimer] = useState(60);
   const [canResend, setCanResend] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
+  const [userPhone, setUserPhone] = useState("");
+  const [userId, setUserId] = useState("");
+  const [userRole, setUserRole] = useState("");
   
   // Animation value for the verification indicator
   const verifyingAnimation = useRef(new Animated.Value(0)).current;
@@ -29,8 +35,29 @@ export default function OTPVerificationScreen() {
   // Set up the refs array
   useEffect(() => {
     inputRefs.current = inputRefs.current.slice(0, 6);
+    loadUserData();
   }, []);
 
+  // Load user data from secure store
+  const loadUserData = async () => {
+    try {
+      const phone = await SecureStore.getItemAsync('phone');
+      const id = await SecureStore.getItemAsync('userId');
+      const role = await SecureStore.getItemAsync('role');
+      
+      if (phone && id && role) {
+        setUserPhone(phone);
+        setUserId(id);
+        setUserRole(role);
+      } else {
+        Alert.alert('Error', 'Registration data not found. Please register again.');
+        router.replace('/(auth)/register');
+      }
+    } catch (error) {
+      console.error('Error loading user data:', error);
+      Alert.alert('Error', 'Failed to load registration data.');
+    }
+  };
   // Timer countdown effect
   useEffect(() => {
     const interval = setInterval(() => {
@@ -102,28 +129,64 @@ export default function OTPVerificationScreen() {
       useNativeDriver: true,
     }).start();
     
-    // Simulate verification (replace with actual verification)
-    setTimeout(() => {
-      // Simulate successful verification
-      router.push("/(auth)/password");
-    }, 1000);
+    try {
+      // Call verification API
+      const response = await verifyCode({
+        code: otpCode,
+        userId: userId,
+      });
+      
+      if (response.success) {
+        // Store verification status
+        await SecureStore.setItemAsync('isVerified', 'true');
+        
+        // Navigate to password screen
+        setTimeout(() => {
+          router.push("/(auth)/password");
+        }, 1000);
+      } else {
+        // Reset OTP and show error
+        setOtp(["", "", "", "", "", ""]);
+        setIsVerifying(false);
+        verifyingAnimation.setValue(0);
+        Alert.alert('Verification Failed', response.message || 'Invalid code. Please try again.');
+        inputRefs.current[0]?.focus();
+      }
+    } catch (error) {
+      console.error('Verification error:', error);
+      setOtp(["", "", "", "", "", ""]);
+      setIsVerifying(false);
+      verifyingAnimation.setValue(0);
+      Alert.alert('Verification Error', 'An error occurred. Please try again.');
+      inputRefs.current[0]?.focus();
+    }
   };
 
   // Handle resend OTP
-  const handleResend = () => {
+  const handleResend = async () => {
     if (Platform.OS !== "web") {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
     
-    setTimer(60);
-    setCanResend(false);
-    setOtp(["", "", "", "", "", ""]);
-    
-    // Focus on the first input
-    inputRefs.current[0]?.focus();
-    
-    // Simulate OTP resend (replace with actual implementation)
-    console.log("Resending OTP...");
+    try {
+      const response = await resendOTP(userPhone, userId);
+      
+      if (response.success) {
+        setTimer(60);
+        setCanResend(false);
+        setOtp(["", "", "", "", "", ""]);
+        
+        // Focus on the first input
+        inputRefs.current[0]?.focus();
+        
+        Alert.alert('Code Sent', response.message || 'New verification code sent to your phone.');
+      } else {
+        Alert.alert('Resend Failed', response.message || 'Failed to resend code. Please try again.');
+      }
+    } catch (error) {
+      console.error('Resend error:', error);
+      Alert.alert('Resend Error', 'An error occurred. Please try again.');
+    }
   };
 
   return (
@@ -131,7 +194,7 @@ export default function OTPVerificationScreen() {
       <View style={styles.content}>
         <Text style={styles.title}>Verification Code</Text>
         <Text style={styles.subtitle}>
-          We've sent a 6-digit code to your phone.{"\n"}
+          We've sent a 6-digit code to {userPhone}.{"\n"}
           Enter it below to continue.
         </Text>
 

@@ -1,9 +1,12 @@
 import { useState } from 'react';
 import { StyleSheet, Text, View, TextInput, TouchableOpacity, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
 import { Link, router } from 'expo-router';
+import * as SecureStore from 'expo-secure-store';
+import { Alert } from 'react-native';
 import Colors from '@/constants/Colors';
 import { SPACING, FONT, FONT_SIZE } from '@/constants/Theme';
 import { Button } from '@/components/ui/Button';
+import { courierOnboarding } from '@/utils/authApi';
 
 interface FormData {
   vehicleType: string;
@@ -23,10 +26,49 @@ export default function VehicleInfoScreen() {
     plateNumber: '',
     vehicleModel: '',
   });
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleContinue = () => {
-    // Navigate to Courier tabs after completing vehicle info
-    router.replace('/(app)/(courier_tabs)');
+  const handleContinue = async () => {
+    if (isLoading) return;
+    
+    setIsLoading(true);
+    try {
+      // Get user ID from secure store
+      const userId = await SecureStore.getItemAsync('userId');
+      
+      if (!userId) {
+        Alert.alert('Error', 'User data not found. Please register again.');
+        router.replace('/(auth)/register');
+        return;
+      }
+      
+      // Call courier onboarding API
+      const response = await courierOnboarding({
+        userId,
+        driving_license_no: formData.drivingLicense,
+        vehicle_type: formData.vehicleType,
+        insurance_company: formData.insuranceCompany,
+        vehicle_capacity: formData.vehicleCapacity,
+        plate_number: formData.plateNumber,
+        vehicle_model: formData.vehicleModel,
+      });
+      
+      if (response.success) {
+        // Store completion status
+        await SecureStore.setItemAsync('profileComplete', 'true');
+        await SecureStore.setItemAsync('userRole', 'courier');
+        
+        // Navigate to Courier tabs
+        router.replace('/(app)/(courier_tabs)');
+      } else {
+        Alert.alert('Profile Error', response.message || 'Failed to complete vehicle profile');
+      }
+    } catch (error) {
+      console.error('Vehicle info error:', error);
+      Alert.alert('Error', 'An error occurred while saving your vehicle information');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const updateFormData = (key: keyof FormData, value: string) => {
@@ -124,7 +166,8 @@ export default function VehicleInfoScreen() {
           <Button
             title="Complete Registration"
             onPress={handleContinue}
-            disabled={!isFormValid}
+            disabled={!isFormValid || isLoading}
+            loading={isLoading}
           />
         </View>
         

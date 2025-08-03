@@ -1,9 +1,12 @@
 import { useState } from 'react';
 import { StyleSheet, Text, View, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform, Image } from 'react-native';
 import { Link, router } from 'expo-router';
+import * as SecureStore from 'expo-secure-store';
+import { Alert } from 'react-native';
 import Colors from '@/constants/Colors';
 import { SPACING, FONT, FONT_SIZE } from '@/constants/Theme';
 import { Button } from '@/components/ui/Button';
+import { login } from '@/utils/authApi';
 
 interface FormData {
   email: string;
@@ -15,17 +18,40 @@ export default function LoginScreen() {
     email: '',
     password: '',
   });
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
+    if (isLoading) return;
     
-    // Mock authentication logic
-    if (formData.email.includes('courier')) {
-      router.replace('/(app)/(courier_tabs)');
-    } else if (formData.email.includes('sme')) {
-      router.replace('/(app)/(sme_tabs)');
-    } else {
-      // Default to courier for demo
-      router.replace('/(app)/(courier_tabs)');
+    setIsLoading(true);
+    try {
+      // Call login API
+      const response = await login({
+        email: formData.email,
+        password: formData.password,
+      });
+      
+      if (response.success && response.user && response.token) {
+        // Store authentication data
+        await SecureStore.setItemAsync('authToken', response.token);
+        await SecureStore.setItemAsync('userId', response.user.id);
+        await SecureStore.setItemAsync('userRole', response.user.role);
+        await SecureStore.setItemAsync('isAuthenticated', 'true');
+        
+        // Navigate based on user role
+        if (response.user.role === 'sme') {
+          router.replace('/(app)/(sme_tabs)');
+        } else {
+          router.replace('/(app)/(courier_tabs)');
+        }
+      } else {
+        Alert.alert('Login Failed', response.message || 'Invalid credentials. Please try again.');
+      }
+    } catch (error) {
+      console.error('Login error:', error);
+      Alert.alert('Login Error', 'An error occurred during login. Please try again.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -87,7 +113,8 @@ export default function LoginScreen() {
             <Button
               title="Sign In"
               onPress={handleLogin}
-              disabled={!formData.email || !formData.password}
+              disabled={!formData.email || !formData.password || isLoading}
+              loading={isLoading}
             />
           </View>
         </View>

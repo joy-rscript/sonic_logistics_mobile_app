@@ -1,9 +1,12 @@
 import { useState } from 'react';
 import { StyleSheet, Text, View, TextInput, TouchableOpacity, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
 import { Link, router } from 'expo-router';
+import * as SecureStore from 'expo-secure-store';
+import { Alert } from 'react-native';
 import Colors from '@/constants/Colors';
 import { SPACING, FONT, FONT_SIZE, BORDER_RADIUS } from '@/constants/Theme';
 import { Button } from '@/components/ui/Button';
+import { smeOnboarding } from '@/utils/authApi';
 
 interface FormData {
   businessName: string;
@@ -23,10 +26,49 @@ export default function BusinessInfoScreen() {
     website: '',
     industry: '',
   });
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleContinue = () => {
-    // Navigate to SME tabs after completing business info
-    router.replace('/(app)/(sme_tabs)');
+  const handleContinue = async () => {
+    if (isLoading) return;
+    
+    setIsLoading(true);
+    try {
+      // Get user ID from secure store
+      const userId = await SecureStore.getItemAsync('userId');
+      
+      if (!userId) {
+        Alert.alert('Error', 'User data not found. Please register again.');
+        router.replace('/(auth)/register');
+        return;
+      }
+      
+      // Call SME onboarding API
+      const response = await smeOnboarding({
+        userId,
+        business_name: formData.businessName,
+        business_address: formData.businessAddress,
+        business_phone: formData.phoneNumber,
+        business_website: formData.website,
+        business_industry: formData.industry,
+        tax_id: formData.taxId,
+      });
+      
+      if (response.success) {
+        // Store completion status
+        await SecureStore.setItemAsync('profileComplete', 'true');
+        await SecureStore.setItemAsync('userRole', 'sme');
+        
+        // Navigate to SME tabs
+        router.replace('/(app)/(sme_tabs)');
+      } else {
+        Alert.alert('Profile Error', response.message || 'Failed to complete business profile');
+      }
+    } catch (error) {
+      console.error('Business info error:', error);
+      Alert.alert('Error', 'An error occurred while saving your business information');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const updateFormData = (key: keyof FormData, value: string) => {
@@ -124,7 +166,8 @@ export default function BusinessInfoScreen() {
           <Button
             title="Complete Registration"
             onPress={handleContinue}
-            disabled={!isFormValid}
+            disabled={!isFormValid || isLoading}
+            loading={isLoading}
           />
         </View>
         
