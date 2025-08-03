@@ -7,6 +7,8 @@ import * as SecureStore from "expo-secure-store";
 import { useRouter } from "expo-router";
 import Colors from "@/constants/Colors";
 import { SPACING, FONT_SIZE, BORDER_RADIUS } from "@/constants/Theme";
+import { signup } from "@/utils/authApi";
+import { Alert } from "react-native";
 
 interface FormData {
   firstName: string;
@@ -115,20 +117,36 @@ const RegisterScreen = () => {
     try {
       // Format the phone number with country code
       const formattedNumber = phoneInput.current?.getNumberAfterPossiblyEliminatingZero();
+      const finalPhone = formattedNumber?.formattedNumber || form.phone;
       
-      if (formattedNumber) {
+      // Call signup API
+      const signupData = {
+        firstName: form.firstName,
+        lastName: form.lastName,
+        phone: finalPhone,
+        role: form.role as 'sme' | 'courier',
+      };
+      
+      const response = await signup(signupData);
+      
+      if (response.success && response.userId) {
+        // Store user data for next steps
         const dataToStore = {
           ...form,
-          phone: formattedNumber.formattedNumber || form.phone,
+          phone: finalPhone,
+          userId: response.userId,
         };
         
         await store(dataToStore);
-        // router.push("/(auth)/otp-verification");
-      router.replace("/(app)/(sme_tabs)" as any);     //app/(app)/(sme_tabs)/index.tsx 
-}
-      console.log("Registration successful");
+        
+        // Navigate to OTP verification
+        router.push("/(auth)/otp-verification");
+      } else {
+        Alert.alert('Registration Failed', response.message || 'Please try again');
+      }
     } catch (err) {
       console.error("Registration error:", err);
+      Alert.alert('Registration Error', 'An error occurred during registration. Please try again.');
     } finally {
       setIsLoading(false);
     }
