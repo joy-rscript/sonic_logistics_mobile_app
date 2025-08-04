@@ -73,6 +73,9 @@ const allAvailableDeliveries: DeliveryRequest[] = [
       smeName: 'Ben Njoki',
       businessIndustry: 'Cement Manufacturing',
       smeId: 'sme_001',
+      smePhone: '+254712345678',
+      recepientPhone: '+254712345679',
+      recepientName: 'John Doe',
     },
     PackageDetails: {
       price: 50,
@@ -111,6 +114,9 @@ const allAvailableDeliveries: DeliveryRequest[] = [
       smeName: 'Alice Mumo',
       businessIndustry: 'Agriculture',
       smeId: 'sme_002',
+      smePhone: '+254712345678',
+      recepientPhone: '+254712345679',
+      recepientName: 'John Doe',
     },
     PackageDetails: {
       price: 40,
@@ -153,6 +159,9 @@ const mockAcceptedDeliveries: DeliveryRequest[] = [
       smeName: 'TechCorp Solutions',
       businessIndustry: 'Technology',
       smeId: 'sme_003',
+      smePhone: '+254712345678',
+      recepientPhone: '+254712345679',
+      recepientName: 'John Doe',
     },
     PackageDetails: {
       price: 60,
@@ -215,6 +224,9 @@ const mockSMEDeliveries: DeliveryRequest[] = [
       smeName: 'TechCorp Solutions',
       businessIndustry: 'Technology',
       smeId: 'sme_003',
+      smePhone: '+254712345678',
+      recepientPhone: '+254712345679',
+      recepientName: 'John Doe',
     },
     PackageDetails: {
       price: 45,
@@ -265,6 +277,9 @@ const mockSMEDeliveries: DeliveryRequest[] = [
       smeName: 'TechCorp Solutions',
       businessIndustry: 'Technology',
       smeId: 'sme_003',
+      smePhone: '+254712345678',
+      recepientPhone: '+254712345679',
+      recepientName: 'John Doe',
     },
     PackageDetails: {
       price: 35,
@@ -370,13 +385,16 @@ export function DeliveryProvider({ children }: { children: ReactNode }) {
         ...delivery,
         status: 'accepted',
         acceptedAt: new Date(),
-        driverId: randomDriver.id,
-        driverName: randomDriver.name,
-        driverLocation: {
-          latitude: delivery.pickupCord.latitude + (Math.random() - 0.5) * 0.01,
-          longitude: delivery.pickupCord.longitude + (Math.random() - 0.5) * 0.01,
-          latitudeDelta: 0.0422,
-          longitudeDelta: 0.0421,
+        CourierDetails: {
+          CourierId: randomDriver.id,
+          CourierName: randomDriver.name,
+          CourierLocation: 'En route to pickup',
+          CourierCoordinates: {
+            latitude: delivery.pickupCord.latitude + (Math.random() - 0.5) * 0.01,
+            longitude: delivery.pickupCord.longitude + (Math.random() - 0.5) * 0.01,
+            latitudeDelta: 0.0422,
+            longitudeDelta: 0.0421,
+          },
         },
         tracker: {
           pickup: 'pending',
@@ -410,70 +428,15 @@ export function DeliveryProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // Original acceptDelivery logic moved to fallback above
-  const acceptDeliveryFallback = (deliveryId: string) => {
-    const delivery = allDeliveries.find(d => d.id === deliveryId);
-    if (!delivery) return;
-
-    // Assign random driver
-    const randomDriver = mockDrivers[Math.floor(Math.random() * mockDrivers.length)];
-
-    // Create ongoing delivery with tracker
-    const ongoingDelivery: DeliveryRequest = {
-      ...delivery,
-      status: 'accepted',
-      acceptedAt: new Date(),
-      driverId: randomDriver.id,
-      driverName: randomDriver.name,
-      driverLocation: {
-        latitude: delivery.pickupCord.latitude + (Math.random() - 0.5) * 0.01,
-        longitude: delivery.pickupCord.longitude + (Math.random() - 0.5) * 0.01,
-        latitudeDelta: 0.0422,
-        longitudeDelta: 0.0421,
-      },
-      tracker: {
-        pickup: 'pending',
-        pickupCode: null,
-        pickupImage: null,
-        dropoff: 'pending',
-        dropoffCode: null,
-        dropoffImage: null,
-      }
-    };
-
-    // Remove from all deliveries and add to pending ongoing
-    setAllDeliveries(prev => prev.filter(d => d.id !== deliveryId));
-    setPendingOngoingDeliveries(prev => [...prev, ongoingDelivery]);
-    
-    // Update SME deliveries if this delivery belongs to an SME
-    setSmeDeliveries(prev => 
-      prev.map(d => 
-        d.id === deliveryId 
-          ? { ...d, status: 'accepted', driverId: randomDriver.id, driverName: randomDriver.name, acceptedAt: new Date() }
-          : d
-      )
-    );
-
-    // Set as current delivery if none exists
-    if (!currentDelivery) {
-      setCurrentDeliveryState(ongoingDelivery);
-    }
-  };
-
   const setCurrentDelivery = (delivery: DeliveryRequest | null) => {
     setCurrentDeliveryState(delivery);
   };
 
   const updateDeliveryTracker = async (deliveryId: string, trackerUpdate: Partial<DeliveryTracker>) => {
-    setLoading(true);
-    setError(null);
     try {
       await updateDeliveryStatus(deliveryId, { tracker: trackerUpdate });
     } catch (err) {
-      setError('Failed to update delivery tracker');
-      console.error('Error updating delivery tracker:', err);
-    } finally {
-      setLoading(false);
+      console.warn('Failed to update delivery tracker via API, updating locally:', err);
     }
 
     // Update pending ongoing deliveries
@@ -693,8 +656,12 @@ export function DeliveryProvider({ children }: { children: ReactNode }) {
       const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
       
       const phoneNumber = type === 'pickup' 
-        ? '+254712345678' // Courier's phone (should come from user context)
-        : '+254712345679'; // Recipient's phone (should come from delivery data)
+        ? delivery.ClientDetails?.smePhone || '+254712345678' // SME's phone for pickup confirmation
+        : delivery.ClientDetails?.recepientPhone || '+254712345679'; // Recipient's phone for dropoff confirmation
+      
+      const recipientName = type === 'pickup'
+        ? delivery.ClientDetails?.smeName || 'Client'
+        : delivery.ClientDetails?.recepientName || 'Recipient';
       
       // In a real implementation, you would call your SMS API here
       // await apiClient.post(`/deliveries/${deliveryId}/send-sms`, { type, phoneNumber, code: verificationCode });
@@ -703,8 +670,11 @@ export function DeliveryProvider({ children }: { children: ReactNode }) {
       await new Promise(resolve => setTimeout(resolve, 1000));
       
       // Mock SMS sending - log the code for development
-      console.log(`🚚 SMS sent to ${phoneNumber} for ${type} verification: ${verificationCode}`);
+      console.log(`🚚 SMS sent to ${phoneNumber} (${recipientName}) for ${type} verification: ${verificationCode}`);
       console.log(`📱 Message: "Sonic Logistics: Your ${type} verification code is ${verificationCode}. Valid for 10 minutes."`);
+      
+      // In real implementation, you would call:
+      // await sendSMSVerificationCode(deliveryId, type, phoneNumber);
       
     } catch (err) {
       setError('Failed to send SMS code');
@@ -714,6 +684,7 @@ export function DeliveryProvider({ children }: { children: ReactNode }) {
       setLoading(false);
     }
   };
+
   const getDeliveryById = (id: string): DeliveryRequest | null => {
     return [...allDeliveries, ...pendingOngoingDeliveries, ...smeDeliveries].find(d => d.id === id) || null;
   };
