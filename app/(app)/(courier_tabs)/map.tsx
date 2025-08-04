@@ -13,9 +13,10 @@ import {
   PanResponder,
   Dimensions,
   Switch,
-  Alert
+  Alert,
+  ActivityIndicator
 } from 'react-native';
-import MapView, { Marker } from 'react-native-maps';
+import MapView, { Marker, Polyline } from 'react-native-maps';
 import { ArrowLeft, Phone, MessageSquare, Navigation, MapPin, Clock, Package, ChevronDown, ChevronRight } from 'lucide-react-native';
 import Colors from '@/constants/Colors';
 import { SPACING, FONT, FONT_SIZE, BORDER_RADIUS, SHADOWS } from '@/constants/Theme';
@@ -51,6 +52,10 @@ export default function CourierMapScreen() {
   const [isDeliveryCompleted, setIsDeliveryCompleted] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
   const [navigationEnabled, setNavigationEnabled] = useState(true);
+  const [routeCoordinates, setRouteCoordinates] = useState<Array<{latitude: number, longitude: number}>>([]);
+  const [isLoadingRoute, setIsLoadingRoute] = useState(false);
+  const [routeDistance, setRouteDistance] = useState<string>('');
+  const [routeDuration, setRouteDuration] = useState<string>('');
 
   const scrollViewRef = useRef<ScrollView>(null);
   
@@ -129,6 +134,119 @@ export default function CourierMapScreen() {
   };
 
   const currentMapLocation = getCurrentMapLocation();
+
+  // Function to get route between two points using Google Directions API
+  const getDirectionsRoute = async (origin: {latitude: number, longitude: number}, destination: {latitude: number, longitude: number}) => {
+    setIsLoadingRoute(true);
+    try {
+      const apiKey = process.env.EXPO_PUBLIC_MAPS_API_KEY;
+      if (!apiKey) {
+        console.warn('Google Maps API key not found, using mock route');
+        // Create a simple straight line for demo
+        const mockRoute = [
+          origin,
+          {
+            latitude: origin.latitude + (destination.latitude - origin.latitude) * 0.3,
+            longitude: origin.longitude + (destination.longitude - origin.longitude) * 0.3,
+          },
+          {
+            latitude: origin.latitude + (destination.latitude - origin.latitude) * 0.7,
+            longitude: origin.longitude + (destination.longitude - origin.longitude) * 0.7,
+          },
+          destination,
+        ];
+        setRouteCoordinates(mockRoute);
+        setRouteDistance('5.2 km');
+        setRouteDuration('12 mins');
+        return;
+      }
+
+      const originStr = `${origin.latitude},${origin.longitude}`;
+      const destinationStr = `${destination.latitude},${destination.longitude}`;
+      
+      const response = await fetch(
+        `https://maps.googleapis.com/maps/api/directions/json?origin=${originStr}&destination=${destinationStr}&key=${apiKey}`
+      );
+      
+      const data = await response.json();
+      
+      if (data.routes && data.routes.length > 0) {
+        const route = data.routes[0];
+        const points = decodePolyline(route.overview_polyline.points);
+        setRouteCoordinates(points);
+        
+        // Extract distance and duration
+        const leg = route.legs[0];
+        setRouteDistance(leg.distance.text);
+        setRouteDuration(leg.duration.text);
+      }
+    } catch (error) {
+      console.error('Error fetching route:', error);
+      // Fallback to straight line
+      setRouteCoordinates([origin, destination]);
+      setRouteDistance('~5 km');
+      setRouteDuration('~15 mins');
+    } finally {
+      setIsLoadingRoute(false);
+    }
+  };
+
+  // Function to decode Google's polyline encoding
+  const decodePolyline = (encoded: string) => {
+    const points = [];
+    let index = 0;
+    const len = encoded.length;
+    let lat = 0;
+    let lng = 0;
+
+    while (index < len) {
+      let b;
+      let shift = 0;
+      let result = 0;
+      do {
+        b = encoded.charAt(index++).charCodeAt(0) - 63;
+        result |= (b & 0x1f) << shift;
+        shift += 5;
+      } while (b >= 0x20);
+      const dlat = ((result & 1) !== 0 ? ~(result >> 1) : (result >> 1));
+      lat += dlat;
+
+      shift = 0;
+      result = 0;
+      do {
+        b = encoded.charAt(index++).charCodeAt(0) - 63;
+        result |= (b & 0x1f) << shift;
+        shift += 5;
+      } while (b >= 0x20);
+      const dlng = ((result & 1) !== 0 ? ~(result >> 1) : (result >> 1));
+      lng += dlng;
+
+      points.push({
+        latitude: lat / 1e5,
+        longitude: lng / 1e5,
+      });
+    }
+    return points;
+  };
+
+  // Update route when delivery or location changes
+  useEffect(() => {
+    if (currentDelivery && currentMapLocation && currentDelivery.CourierDetails?.CourierCoordinates) {
+      const courierLocation = {
+        latitude: currentDelivery.CourierDetails.CourierCoordinates.latitude,
+        longitude: currentDelivery.CourierDetails.CourierCoordinates.longitude,
+      };
+      
+      const targetLocation = {
+        latitude: currentMapLocation.coordinates.latitude,
+        longitude: currentMapLocation.coordinates.longitude,
+      };
+      
+      getDirectionsRoute(courierLocation, targetLocation);
+    } else {
+      setRouteCoordinates([]);
+    }
+  }, [currentDelivery, currentMapLocation]);
 
   // Set current step based on delivery tracker
   useEffect(() => {
@@ -359,6 +477,8 @@ export default function CourierMapScreen() {
             style={styles.map}
             region={currentMapLocation.coordinates}
             provider="google"
+            showsUserLocation={true}
+            showsMyLocationButton={false}
           >
             {/* Current Target Marker */}
             <Marker
@@ -375,6 +495,17 @@ export default function CourierMapScreen() {
                 title="Your Location"
                 description="Current driver position"
                 pinColor={Colors.light.success}
+              />
+            )}
+            
+            {/* Route Polyline */}
+            {routeCoordinates.length > 1 && (
+              <Polyline
+                coordinates={routeCoordinates}
+                strokeColor={Colors.light.primary}
+                strokeWidth={4}
+                strokePattern={[1]}
+                geodesic={true}
               />
             )}
           </MapView>
@@ -400,6 +531,13 @@ export default function CourierMapScreen() {
               hasUnread={mapUnreadCount > 0}
               onPress={() => setShowNotificationPanel(true)}
             />
+            {isLoadingRoute && (
+              <ActivityIndicator 
+                size="small" 
+                color={Colors.light.primary} 
+                style={styles.routeLoader}
+              />
+            )}
           </View>
         </View>
 
@@ -484,6 +622,20 @@ export default function CourierMapScreen() {
                   <Text style={styles.locationText} numberOfLines={1}>
                     {currentDelivery.dropoffLocation}
                   </Text>
+                </View>
+              )}
+              
+              {/* Route Info */}
+              {routeDistance && routeDuration && (
+                <View style={styles.routeInfoContainer}>
+                  <View style={styles.routeInfoItem}>
+                    <MapPin size={14} color={Colors.light.primary} />
+                    <Text style={styles.routeInfoText}>{routeDistance}</Text>
+                  </View>
+                  <View style={styles.routeInfoItem}>
+                    <Clock size={14} color={Colors.light.primary} />
+                    <Text style={styles.routeInfoText}>{routeDuration}</Text>
+                  </View>
                 </View>
               )}
             </View>
@@ -747,5 +899,26 @@ const styles = StyleSheet.create({
     color: Colors.light.placeholder,
     marginLeft: SPACING.sm,
     fontStyle: 'italic',
+  },
+  routeLoader: {
+    marginLeft: SPACING.sm,
+  },
+  routeInfoContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginTop: SPACING.sm,
+    paddingTop: SPACING.sm,
+    borderTopWidth: 1,
+    borderTopColor: Colors.light.border,
+  },
+  routeInfoItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.xs,
+  },
+  routeInfoText: {
+    fontFamily: FONT.medium,
+    fontSize: FONT_SIZE.sm,
+    color: Colors.light.text,
   },
 });

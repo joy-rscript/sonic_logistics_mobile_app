@@ -685,21 +685,26 @@ export function DeliveryProvider({ children }: { children: ReactNode }) {
     setLoading(true);
     setError(null);
     try {
-      // In a real implementation, this would call your SMS API
-      await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API call
-      
-      // Mock SMS sending logic
+      // Get delivery details for phone numbers
       const delivery = getDeliveryById(deliveryId);
       if (!delivery) throw new Error('Delivery not found');
       
+      // Generate 6-digit verification code
+      const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
+      
       const phoneNumber = type === 'pickup' 
         ? '+254712345678' // Courier's phone (should come from user context)
-        : delivery.ClientDetails?.phone || '+254712345679'; // Recipient's phone
+        : '+254712345679'; // Recipient's phone (should come from delivery data)
       
-      console.log(`SMS sent to ${phoneNumber} for ${type} verification`);
+      // In a real implementation, you would call your SMS API here
+      // await apiClient.post(`/deliveries/${deliveryId}/send-sms`, { type, phoneNumber, code: verificationCode });
       
-      // In real implementation, you would call:
-      // await apiClient.post(`/deliveries/${deliveryId}/send-sms`, { type, phoneNumber });
+      // Simulate API call delay
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Mock SMS sending - log the code for development
+      console.log(`🚚 SMS sent to ${phoneNumber} for ${type} verification: ${verificationCode}`);
+      console.log(`📱 Message: "Sonic Logistics: Your ${type} verification code is ${verificationCode}. Valid for 10 minutes."`);
       
     } catch (err) {
       setError('Failed to send SMS code');
