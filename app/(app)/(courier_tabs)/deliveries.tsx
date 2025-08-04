@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { StyleSheet, Text, View, SafeAreaView, ScrollView, TouchableOpacity, Image } from 'react-native';
+import { StyleSheet, Text, View, SafeAreaView, ScrollView, TouchableOpacity, Image, Alert } from 'react-native';
 import { Clock, MapPin, Package, CircleCheck as CheckCircle, CircleAlert as AlertCircle, Phone, MessageSquare } from 'lucide-react-native';
 import { Linking } from 'react-native';
 import { router } from 'expo-router';
@@ -17,6 +17,7 @@ export default function CourierDeliveriesScreen() {
   const [activeTab, setActiveTab] = useState('ongoing');
   const [showNotificationPanel, setShowNotificationPanel] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [tappedDeliveries, setTappedDeliveries] = useState<Set<string>>(new Set());
   const { 
     pendingOngoingDeliveries, 
     currentDelivery, 
@@ -33,7 +34,34 @@ export default function CourierDeliveriesScreen() {
   } = useNotificationsByType('delivery');
 
   const handleDeliveryPress = (delivery: any) => {
-    setCurrentDelivery(delivery);
+    const deliveryId = delivery.id;
+    
+    if (tappedDeliveries.has(deliveryId)) {
+      // Second tap - redirect to map
+      setCurrentDelivery(delivery);
+      router.push('/(app)/(courier_tabs)/map');
+    } else {
+      // First tap - show message and mark as tapped
+      setTappedDeliveries(prev => new Set(prev).add(deliveryId));
+      Alert.alert(
+        'Delivery Tracking',
+        'Currently being tracked in your map.',
+        [
+          {
+            text: 'OK',
+            style: 'default'
+          },
+          {
+            text: 'Go to Map',
+            style: 'default',
+            onPress: () => {
+              setCurrentDelivery(delivery);
+              router.push('/(app)/(courier_tabs)/map');
+            }
+          }
+        ]
+      );
+    }
   };
   
   const handleCallClient = (delivery: any) => {
