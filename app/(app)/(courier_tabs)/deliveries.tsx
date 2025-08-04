@@ -4,7 +4,7 @@ import { Clock, MapPin, Package, CircleCheck as CheckCircle, CircleAlert as Aler
 import { Linking } from 'react-native';
 import { router } from 'expo-router';
 import Colors from '@/constants/Colors';
-import { SPACING, FONT, FONT_SIZE, BORDER_RADIUS, SHADOWS } from '@/constants/Theme';
+import { SPACING, FONT, FONT_SIZE, BORDER_RADIUS, SHADOWS } from '@/constantas/Theme';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { useDelivery } from '@/contexts/DeliveryContext';
