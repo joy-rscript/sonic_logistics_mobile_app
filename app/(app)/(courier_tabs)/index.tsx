@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   StyleSheet, Text, View, SafeAreaView, ScrollView, TouchableOpacity, 
   FlatList 
@@ -14,17 +14,6 @@ import { Badge } from '@/components/ui/Badge';
 import { useDelivery } from '@/contexts/DeliveryContext';
 import { useNotifications } from '@/contexts/NotificationContext';
 import { NotificationPanel } from '@/components/ui/NotificationPanel';
-
-const NotificationBell = ({ hasUnread, onPress }: { hasUnread: boolean; onPress: () => void }) => (
-  <TouchableOpacity onPress={onPress} style={styles.notificationButton}>
-    <Bell size={24} color={Colors.light.text} />
-    {hasUnread && (
-      <View style={styles.notificationBadge}>
-        <Text style={styles.notificationBadgeText}>!</Text>
-      </View>
-    )}
-  </TouchableOpacity>
-);
 
 export default function CourierHomeScreen() {
   const [showNotifications, setShowNotifications] = useState(false);
@@ -46,9 +35,7 @@ export default function CourierHomeScreen() {
     refreshNotifications 
   } = useNotifications();
 
-  const [selectedDelivery, setSelectedDelivery] = useState(
-    allDeliveries.length > 0 ? allDeliveries[0] : null
-  );
+  const [selectedDelivery, setSelectedDelivery] = useState<any>(null);
 
   // Set up location and keyboard listeners
   useEffect(() => {
@@ -56,10 +43,15 @@ export default function CourierHomeScreen() {
     refreshDeliveries();
     refreshNotifications();
     
+    // Set first delivery as selected when data loads
+    if (allDeliveries.length > 0 && !selectedDelivery) {
+      setSelectedDelivery(allDeliveries[0]);
+    }
+    
     return () => {
       // Cleanup if needed
     };
-  }, []);
+  }, [allDeliveries]);
 
   const handleNotificationRead = (id: string) => {
     markAsRead(id);
@@ -106,35 +98,13 @@ export default function CourierHomeScreen() {
         </View>
 
         {showNotifications && (
-          <View style={styles.notificationsOverlay}>
-            <Text style={styles.sectionTitle}>Notifications</Text>
-            {deliveryLoading && (
-              <Text style={styles.loadingText}>Loading notifications...</Text>
-            )}
-            {deliveryError && (
-              <Text style={styles.errorText}>{deliveryError}</Text>
-            )}
-            {notifications.map(notification => (
-              <TouchableOpacity 
-                key={notification.id} 
-                style={[styles.notificationCard, notification.read && styles.notificationCardRead]}
-                onPress={() => handleNotificationRead(notification.id)}
-              >
-                <View style={[styles.notificationIcon, { backgroundColor: notification.type === 'system' ? '#4CAF50' : notification.type === 'update' ? '#2196F3' : '#FFC107' }]}>
-                  <Text style={styles.notificationIconText}>
-                    {notification.type === 'system' ? 'S' : notification.type === 'update' ? 'U' : 'D'}
-                  </Text>
-                </View>
-                <View style={styles.notificationContent}>
-                  <Text style={styles.notificationTitle}>{notification.title}</Text>
-                  <Text style={styles.notificationMessage} numberOfLines={2}>
-                    {notification.message}
-                  </Text>
-                </View>
-                {!notification.read && <View style={styles.unreadIndicator} />}
-              </TouchableOpacity>
-            ))}
-          </View>
+          <NotificationPanel
+            visible={showNotifications}
+            onClose={() => setShowNotifications(false)}
+            notifications={notifications}
+            onNotificationRead={handleNotificationRead}
+            title="Home Notifications"
+          />
         )}
 
         {!showNotifications && allDeliveries.length > 0 ? (
@@ -276,11 +246,6 @@ export default function CourierHomeScreen() {
         ) : null}
       </ScrollView>
 
-      {/* Notification Panel */}
-      <NotificationPanel 
-        visible={showNotificationPanel}
-        onClose={() => setShowNotificationPanel(false)}
-      />
     </SafeAreaView>
   );
 }

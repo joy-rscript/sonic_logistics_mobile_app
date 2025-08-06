@@ -7,10 +7,12 @@ import { Button } from './Button';
 import { useDelivery } from '@/contexts/DeliveryContext';
 
 interface DeliveryStepperProps {
-  onStepCompleate: (step: string, data?: any) => void;
+  onStepComplete: (step: string, data?: any) => void;
   currentStep: number;
   isCompleted: boolean;
   deliveryId?: string;
+  deliveryData?: any;
+  expanded?: boolean;
 }
 
 interface StepData {
@@ -21,60 +23,64 @@ interface StepData {
   expanded: boolean;
 }
 
-export function DeliveryStepper({ onStepComplete, currentStep, isCompleted, deliveryId }: DeliveryStepperProps) {
+export function DeliveryStepper({ 
+  onStepComplete, 
+  currentStep, 
+  isCompleted, 
+  deliveryId, 
+  deliveryData,
+  expanded = false 
+}: DeliveryStepperProps) {
   const [smsCode, setSmsCode] = useState('');
   const [pickupImage, setPickupImage] = useState<string | null>(null);
   const [deliveryImage, setDeliveryImage] = useState<string | null>(null);
   const [recipientCode, setRecipientCode] = useState('');
-  const { uploadImage, verifyCode, loading } = useDelivery();
+  const { uploadImage, verifyCode, loading, sendSMSCode } = useDelivery();
 
   const steps: StepData[] = [
     {
-      id: 'pickup_done',
-      title: 'Mark pickup as done',
+      id: 'pickup_sms',
+      title: 'Send SMS to client for pickup',
       completed: currentStep > 0,
       disabled: false,
       expanded: true,
     },
     {
-      id: 'sms_code',
-      title: 'Enter code from your SMS',
+      id: 'pickup_image',
+      title: 'Take pickup confirmation photo',
       completed: currentStep > 1,
       disabled: currentStep < 1,
       expanded: currentStep >= 1,
     },
     {
-      id: 'pickup_image',
-      title: 'Insert picture on pickup',
+      id: 'dropoff_sms',
+      title: 'Send SMS to recipient for dropoff',
       completed: currentStep > 2,
       disabled: currentStep < 2,
       expanded: currentStep >= 2,
     },
     {
-      id: 'dropoff_done',
-      title: 'Mark drop-off as done',
+      id: 'dropoff_image',
+      title: 'Take dropoff confirmation photo',
       completed: currentStep > 3,
       disabled: currentStep < 3,
       expanded: currentStep >= 3,
-    },
-    {
-      id: 'recipient_code',
-      title: 'Enter code from recipient',
-      completed: currentStep > 4,
-      disabled: currentStep < 4,
-      expanded: currentStep >= 4,
-    },
-    {
-      id: 'delivery_image',
-      title: 'Insert picture on delivery',
-      completed: currentStep > 5,
-      disabled: currentStep < 5,
-      expanded: currentStep >= 5,
     },
   ];
 
   const handleStepAction = (stepId: string, data?: any) => {
     onStepComplete(stepId, data);
+  };
+
+  const handleSendSMS = async (type: 'pickup' | 'dropoff', stepId: string) => {
+    if (!deliveryId) return;
+    
+    try {
+      await sendSMSCode(deliveryId, type);
+      handleStepAction(stepId);
+    } catch (error) {
+      console.error('Failed to send SMS:', error);
+    }
   };
 
   const handleImageUpload = (type: 'pickup' | 'delivery') => {
@@ -132,12 +138,8 @@ export function DeliveryStepper({ onStepComplete, currentStep, isCompleted, deli
   }
 
   return (
-    <ScrollView 
-      style={styles.container}
-      showsVerticalScrollIndicator={false}
-      contentContainerStyle={styles.scrollContent}
-    >
-      
+    <View style={[styles.container, expanded && styles.expandedContainer]}>
+      <Text style={styles.title}>Delivery Steps</Text>
       {steps.map((step, index) => {
         const isLast = index === steps.length - 1;
         
@@ -168,42 +170,18 @@ export function DeliveryStepper({ onStepComplete, currentStep, isCompleted, deli
                   {step.title}
                 </Text>
                 
-                {step.expanded && !step.disabled && (
+                {expanded && step.expanded && !step.disabled && (
                   <View style={styles.stepActions}>
-                    {step.id === 'pickup_done' && !step.completed && (
+                    {step.id === 'pickup_sms' && !step.completed && (
                       <TouchableOpacity 
-                        style={styles.doneButton}
-                        onPress={() => handleStepAction('pickup_done')}
+                        style={styles.smsButton}
+                        onPress={() => handleSendSMS('pickup', 'pickup_sms')}
+                        disabled={loading}
                       >
-                        <Text style={styles.doneButtonText}>Done</Text>
+                        <Text style={styles.smsButtonText}>
+                          {loading ? 'Sending...' : 'Send SMS'}
+                        </Text>
                       </TouchableOpacity>
-                    )}
-                    
-                    {step.id === 'sms_code' && !step.completed && (
-                      <View style={styles.inputContainer}>
-                        <TextInput
-                          style={styles.codeInput}
-                          placeholder="Enter SMS code"
-                          placeholderTextColor={Colors.light.placeholder}
-                          value={smsCode}
-                          onChangeText={setSmsCode}
-                          keyboardType="numeric"
-                          maxLength={6}
-                        />
-                        <TouchableOpacity 
-                          style={[styles.submitButton, (!smsCode || loading) && styles.submitButtonDisabled]}
-                          onPress={() => {
-                            if (smsCode) {
-                              handleCodeVerification(smsCode, 'pickup', 'sms_code');
-                            }
-                          }}
-                          disabled={!smsCode || loading}
-                        >
-                          <Text style={[styles.submitButtonText, (!smsCode || loading) && styles.submitButtonTextDisabled]}>
-                            {loading ? 'Verifying...' : 'Submit'}
-                          </Text>
-                        </TouchableOpacity>
-                      </View>
                     )}
                     
                     {step.id === 'pickup_image' && !step.completed && (
@@ -230,50 +208,26 @@ export function DeliveryStepper({ onStepComplete, currentStep, isCompleted, deli
                       </View>
                     )}
                     
-                    {step.id === 'dropoff_done' && !step.completed && (
+                    {step.id === 'dropoff_sms' && !step.completed && (
                       <TouchableOpacity 
-                        style={styles.doneButton}
-                        onPress={() => handleStepAction('dropoff_done')}
+                        style={styles.smsButton}
+                        onPress={() => handleSendSMS('dropoff', 'dropoff_sms')}
+                        disabled={loading}
                       >
-                        <Text style={styles.doneButtonText}>Done</Text>
+                        <Text style={styles.smsButtonText}>
+                          {loading ? 'Sending...' : 'Send SMS'}
+                        </Text>
                       </TouchableOpacity>
                     )}
                     
-                    {step.id === 'recipient_code' && !step.completed && (
-                      <View style={styles.inputContainer}>
-                        <TextInput
-                          style={styles.codeInput}
-                          placeholder="Enter recipient code"
-                          placeholderTextColor={Colors.light.placeholder}
-                          value={recipientCode}
-                          onChangeText={setRecipientCode}
-                          keyboardType="numeric"
-                          maxLength={6}
-                        />
-                        <TouchableOpacity 
-                          style={[styles.submitButton, (!recipientCode || loading) && styles.submitButtonDisabled]}
-                          onPress={() => {
-                            if (recipientCode) {
-                              handleCodeVerification(recipientCode, 'dropoff', 'recipient_code');
-                            }
-                          }}
-                          disabled={!recipientCode || loading}
-                        >
-                          <Text style={[styles.submitButtonText, (!recipientCode || loading) && styles.submitButtonTextDisabled]}>
-                            {loading ? 'Verifying...' : 'Submit'}
-                          </Text>
-                        </TouchableOpacity>
-                      </View>
-                    )}
-                    
-                    {step.id === 'delivery_image' && !step.completed && (
+                    {step.id === 'dropoff_image' && !step.completed && (
                       <View style={styles.imageUploadContainer}>
                         {deliveryImage ? (
                           <View style={styles.imagePreview}>
                             <Image source={{ uri: deliveryImage }} style={styles.previewImage} />
                             <TouchableOpacity 
                               style={styles.confirmButton}
-                              onPress={() => handleStepAction('delivery_image', { image: deliveryImage })}
+                              onPress={() => handleStepAction('dropoff_image', { image: deliveryImage })}
                             >
                               <Text style={styles.confirmButtonText}>Confirm</Text>
                             </TouchableOpacity>
@@ -296,7 +250,7 @@ export function DeliveryStepper({ onStepComplete, currentStep, isCompleted, deli
           </View>
         );
       })}
-    </ScrollView>
+    </View>
   );
 }
 
@@ -304,9 +258,10 @@ const styles = StyleSheet.create({
   container: {
     backgroundColor: Colors.light.card,
     borderRadius: BORDER_RADIUS.lg,
+    padding: SPACING.md,
   },
-  scrollContent: {
-    padding: SPACING.sm,
+  expandedContainer: {
+    minHeight: 300,
   },
   title: {
     fontFamily: FONT.poppinsBold,
@@ -370,14 +325,14 @@ const styles = StyleSheet.create({
   stepActions: {
     marginTop: SPACING.xs,
   },
-  doneButton: {
+  smsButton: {
     alignSelf: 'flex-end',
     backgroundColor: Colors.light.primary,
     paddingHorizontal: SPACING.md,
     paddingVertical: SPACING.xs,
     borderRadius: BORDER_RADIUS.sm,
   },
-  doneButtonText: {
+  smsButtonText: {
     fontFamily: FONT.medium,
     fontSize: FONT_SIZE.sm,
     color: Colors.light.background,

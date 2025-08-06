@@ -8,14 +8,13 @@ import { Search, Phone, MessageSquare, Users, Shield } from 'lucide-react-native
 import { useLocalSearchParams, Linking } from 'expo-router';
 import Colors from '@/constants/Colors';
 import { SPACING, FONT, FONT_SIZE, BORDER_RADIUS } from '@/constants/Theme';
-import { mockChats } from '@/data/mockData';
 import { ChatComponent } from '@/components/ui/ChatComponent';
+import { useChat } from '@/contexts/ChatContext';
 
 export default function CourierMessagingScreen() {
   const params = useLocalSearchParams();
   
   const [searchQuery, setSearchQuery] = useState('');
-  const [chats, setChats] = useState(mockChats);
   const [activeTab, setActiveTab] = useState<'clients' | 'immigration'>('clients');
   const [showChat, setShowChat] = useState(false);
   const [selectedUser, setSelectedUser] = useState<{
@@ -25,6 +24,13 @@ export default function CourierMessagingScreen() {
     avatar?: string;
     deliveryId?: string;
   } | null>(null);
+  
+  const { chats, loading, error, refreshChats } = useChat();
+  
+  // Load chats when component mounts
+  useEffect(() => {
+    refreshChats();
+  }, []);
   
   // Handle incoming navigation from deliveries tab
   useEffect(() => {
@@ -90,20 +96,30 @@ export default function CourierMessagingScreen() {
     Linking.openURL(`tel:${phoneNumber}`);
   };
   
-  const renderChatItem = ({ item }: { item: typeof mockChats[0] }) => (
+  const renderChatItem = ({ item }: { item: any }) => (
     <TouchableOpacity 
       style={styles.chatItem}
-      onPress={() => handleChatPress(item.id, item.name, '+254712345678', item.avatar)}
+      onPress={() => handleChatPress(
+        item.id, 
+        item.participantNames?.[0] || item.name, 
+        '+254712345678', 
+        item.participantAvatars?.[0] || item.avatar
+      )}
     >
       <View style={styles.avatarContainer}>
-        <Image source={{ uri: item.avatar }} style={styles.avatar} />
+        <Image source={{ uri: item.participantAvatars?.[0] || item.avatar || 'https://i.ibb.co/M8JnWhy/avatar.png' }} style={styles.avatar} />
         {item.online && <View style={styles.onlineIndicator} />}
       </View>
       
       <View style={styles.chatContent}>
         <View style={styles.chatHeader}>
-          <Text style={styles.username}>{item.name}</Text>
-          <Text style={styles.timestamp}>{item.lastMessageTime}</Text>
+          <Text style={styles.username}>{item.participantNames?.[0] || item.name}</Text>
+          <Text style={styles.timestamp}>
+            {item.lastMessageTime instanceof Date 
+              ? item.lastMessageTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+              : item.lastMessageTime
+            }
+          </Text>
         </View>
         
         <View style={styles.chatPreview}>
@@ -113,7 +129,11 @@ export default function CourierMessagingScreen() {
           >
             {item.lastMessage}
           </Text>
-          {!item.read && <View style={styles.unreadBadge}><Text style={styles.unreadCount}>{item.unreadCount}</Text></View>}
+          {item.unreadCount > 0 && (
+            <View style={styles.unreadBadge}>
+              <Text style={styles.unreadCount}>{item.unreadCount}</Text>
+            </View>
+          )}
         </View>
       </View>
     </TouchableOpacity>
@@ -158,7 +178,7 @@ export default function CourierMessagingScreen() {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <View>
-          <Text style={styles.headerTitle}>Meccssages</Text>
+          <Text style={styles.headerTitle}>Messages</Text>
           <Text style={styles.headerSubtitle}>Chat with your clients</Text>
         </View>
         
@@ -200,6 +220,15 @@ export default function CourierMessagingScreen() {
       </View>
       
       {activeTab === 'clients' ? (
+        loading ? (
+          <View style={styles.loadingContainer}>
+            <Text style={styles.loadingText}>Loading conversations...</Text>
+          </View>
+        ) : error ? (
+          <View style={styles.errorContainer}>
+            <Text style={styles.errorText}>{error}</Text>
+          </View>
+        ) : chats.length > 0 ? (
         <FlatList
           data={chats}
           renderItem={renderChatItem}
@@ -207,6 +236,15 @@ export default function CourierMessagingScreen() {
           contentContainerStyle={styles.chatsList}
           showsVerticalScrollIndicator={false}
         />
+        ) : (
+          <View style={styles.emptyState}>
+            <MessageSquare size={64} color={Colors.light.placeholder} />
+            <Text style={styles.emptyStateTitle}>No Conversations</Text>
+            <Text style={styles.emptyStateText}>
+              Start chatting with clients when you accept deliveries
+            </Text>
+          </View>
+        )
       ) : (
         <FlatList
           data={immigrationOfficers}
@@ -435,5 +473,48 @@ const styles = StyleSheet.create({
     fontFamily: FONT.medium,
     fontSize: FONT_SIZE.xs,
     color: Colors.light.background,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: SPACING.xxl,
+  },
+  loadingText: {
+    fontFamily: FONT.regular,
+    fontSize: FONT_SIZE.md,
+    color: Colors.light.placeholder,
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: SPACING.xxl,
+  },
+  errorText: {
+    fontFamily: FONT.regular,
+    fontSize: FONT_SIZE.md,
+    color: Colors.light.error,
+    textAlign: 'center',
+  },
+  emptyState: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: SPACING.xxl,
+  },
+  emptyStateTitle: {
+    fontFamily: FONT.poppinsBold,
+    fontSize: FONT_SIZE.lg,
+    color: Colors.light.text,
+    marginTop: SPACING.md,
+    marginBottom: SPACING.xs,
+  },
+  emptyStateText: {
+    fontFamily: FONT.regular,
+    fontSize: FONT_SIZE.md,
+    color: Colors.light.placeholder,
+    textAlign: 'center',
+    paddingHorizontal: SPACING.lg,
   },
 });

@@ -56,6 +56,7 @@ export default function CourierMapScreen() {
   const [isLoadingRoute, setIsLoadingRoute] = useState(false);
   const [routeDistance, setRouteDistance] = useState<string>('');
   const [routeDuration, setRouteDuration] = useState<string>('');
+  const [stepperExpanded, setStepperExpanded] = useState(false);
 
   const scrollViewRef = useRef<ScrollView>(null);
   
@@ -141,23 +142,15 @@ export default function CourierMapScreen() {
     try {
       const apiKey = process.env.EXPO_PUBLIC_MAPS_API_KEY;
       if (!apiKey) {
-        console.warn('Google Maps API key not found, using mock route');
-        // Create a simple straight line for demo
-        const mockRoute = [
-          origin,
-          {
-            latitude: origin.latitude + (destination.latitude - origin.latitude) * 0.3,
-            longitude: origin.longitude + (destination.longitude - origin.longitude) * 0.3,
-          },
-          {
-            latitude: origin.latitude + (destination.latitude - origin.latitude) * 0.7,
-            longitude: origin.longitude + (destination.longitude - origin.longitude) * 0.7,
-          },
-          destination,
-        ];
+        console.warn('Google Maps API key not found, creating realistic road route');
+        // Create a more realistic route that follows potential roads
+        const mockRoute = createRealisticRoute(origin, destination);
         setRouteCoordinates(mockRoute);
-        setRouteDistance('5.2 km');
-        setRouteDuration('12 mins');
+        
+        // Calculate approximate distance and duration
+        const distance = calculateDistance(origin, destination);
+        setRouteDistance(`${distance.toFixed(1)} km`);
+        setRouteDuration(`${Math.ceil(distance * 2.5)} mins`); // Approximate 2.5 mins per km
         return;
       }
 
@@ -179,16 +172,59 @@ export default function CourierMapScreen() {
         const leg = route.legs[0];
         setRouteDistance(leg.distance.text);
         setRouteDuration(leg.duration.text);
+      } else {
+        // Fallback to realistic route if no Google route found
+        const mockRoute = createRealisticRoute(origin, destination);
+        setRouteCoordinates(mockRoute);
+        const distance = calculateDistance(origin, destination);
+        setRouteDistance(`${distance.toFixed(1)} km`);
+        setRouteDuration(`${Math.ceil(distance * 2.5)} mins`);
       }
     } catch (error) {
       console.error('Error fetching route:', error);
-      // Fallback to straight line
-      setRouteCoordinates([origin, destination]);
-      setRouteDistance('~5 km');
-      setRouteDuration('~15 mins');
+      // Fallback to realistic route
+      const mockRoute = createRealisticRoute(origin, destination);
+      setRouteCoordinates(mockRoute);
+      const distance = calculateDistance(origin, destination);
+      setRouteDistance(`${distance.toFixed(1)} km`);
+      setRouteDuration(`${Math.ceil(distance * 2.5)} mins`);
     } finally {
       setIsLoadingRoute(false);
     }
+  };
+
+  // Create a more realistic route that follows potential road patterns
+  const createRealisticRoute = (origin: {latitude: number, longitude: number}, destination: {latitude: number, longitude: number}) => {
+    const points = [];
+    const steps = 8; // Number of intermediate points
+    
+    for (let i = 0; i <= steps; i++) {
+      const ratio = i / steps;
+      
+      // Add some curvature to simulate road patterns
+      const latOffset = Math.sin(ratio * Math.PI) * 0.002 * (Math.random() - 0.5);
+      const lngOffset = Math.cos(ratio * Math.PI * 2) * 0.002 * (Math.random() - 0.5);
+      
+      points.push({
+        latitude: origin.latitude + (destination.latitude - origin.latitude) * ratio + latOffset,
+        longitude: origin.longitude + (destination.longitude - origin.longitude) * ratio + lngOffset,
+      });
+    }
+    
+    return points;
+  };
+
+  // Calculate distance between two coordinates
+  const calculateDistance = (origin: {latitude: number, longitude: number}, destination: {latitude: number, longitude: number}) => {
+    const R = 6371; // Earth's radius in kilometers
+    const dLat = (destination.latitude - origin.latitude) * Math.PI / 180;
+    const dLon = (destination.longitude - origin.longitude) * Math.PI / 180;
+    const a = 
+      Math.sin(dLat/2) * Math.sin(dLat/2) +
+      Math.cos(origin.latitude * Math.PI / 180) * Math.cos(destination.latitude * Math.PI / 180) * 
+      Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
   };
 
   // Function to decode Google's polyline encoding
@@ -271,7 +307,9 @@ export default function CourierMapScreen() {
       return;
     }
 
-    if (currentStep >= 3) {
+    if (stepperExpanded) {
+      snapToPosition(SNAP_POINTS.EXPANDED);
+    } else if (currentStep >= 3) {
       snapToPosition(SNAP_POINTS.FULL);
     } else if (currentStep >= 2) {
       snapToPosition(SNAP_POINTS.EXPANDED);
@@ -280,7 +318,7 @@ export default function CourierMapScreen() {
     } else {
       snapToPosition(SNAP_POINTS.COLLAPSED);
     }
-  }, [currentStep, currentDelivery]);
+  }, [currentStep, currentDelivery, stepperExpanded]);
 
   // Set up location and keyboard listeners
   useEffect(() => {
@@ -321,7 +359,9 @@ export default function CourierMapScreen() {
       'keyboardDidHide',
       () => {
         setKeyboardVisible(false);
-        if (currentDelivery && currentStep >= 3) {
+        if (stepperExpanded) {
+          snapToPosition(SNAP_POINTS.EXPANDED);
+        } else if (currentDelivery && currentStep >= 3) {
           snapToPosition(SNAP_POINTS.FULL);
         } else if (currentDelivery && currentStep >= 2) {
           snapToPosition(SNAP_POINTS.EXPANDED);
@@ -373,12 +413,16 @@ export default function CourierMapScreen() {
         targetSnapPoint = currentStep >= 3 ? SNAP_POINTS.FULL : SNAP_POINTS.EXPANDED;
       } else if (currentHeight < (SNAP_POINTS.COLLAPSED + SNAP_POINTS.PARTIAL) / 2) {
         targetSnapPoint = SNAP_POINTS.COLLAPSED;
+        setStepperExpanded(false);
       } else if (currentHeight < (SNAP_POINTS.PARTIAL + SNAP_POINTS.EXPANDED) / 2) {
         targetSnapPoint = SNAP_POINTS.PARTIAL;
+        setStepperExpanded(false);
       } else if (currentHeight < (SNAP_POINTS.EXPANDED + SNAP_POINTS.FULL) / 2) {
         targetSnapPoint = SNAP_POINTS.EXPANDED;
+        setStepperExpanded(true);
       } else {
         targetSnapPoint = SNAP_POINTS.FULL;
+        setStepperExpanded(true);
       }
 
       setBottomSheetHeight(targetSnapPoint);
@@ -675,7 +719,69 @@ export default function CourierMapScreen() {
             </Card>
 
             {/* Delivery Stepper */}
-            <DeliveryStepper 
+            <TouchableOpacity 
+              onPress={() => {
+                setStepperExpanded(!stepperExpanded);
+                snapToPosition(stepperExpanded ? SNAP_POINTS.PARTIAL : SNAP_POINTS.EXPANDED);
+              }}
+              activeOpacity={1}
+            >
+              <DeliveryStepper 
+                onStepComplete={handleStepComplete}
+                currentStep={currentStep}
+                isCompleted={isDeliveryCompleted}
+                deliveryId={currentDelivery?.id}
+                deliveryData={currentDelivery}
+                expanded={stepperExpanded}
+              />
+            </TouchableOpacity>
+          </ScrollView>
+        </Animated.View>
+      </KeyboardAvoidingView>
+
+      {/* Map touch overlay to collapse stepper */}
+      {stepperExpanded && (
+        <TouchableOpacity
+          style={styles.mapTouchOverlay}
+          onPress={() => {
+            setStepperExpanded(false);
+            snapToPosition(SNAP_POINTS.PARTIAL);
+          }}
+          activeOpacity={1}
+        />
+      )}
+
+      <NotificationPanel
+        visible={showNotificationPanel}
+        onClose={() => setShowNotificationPanel(false)}
+        notifications={mapNotifications}
+        onNotificationRead={markAsRead}
+        title="Map Notifications"
+      />
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: Colors.light.background,
+  },
+  mapContainer: {
+    flex: 1,
+    position: 'relative',
+  },
+  map: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  mapTouchOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: screenHeight * 0.25, // Above the collapsed stepper
+    zIndex: 0,
+  },
               onStepComplete={handleStepComplete}
               currentStep={currentStep}
               isCompleted={isDeliveryCompleted}

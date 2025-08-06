@@ -1,10 +1,11 @@
 import { useState } from 'react';
+import { useEffect } from 'react';
 import { StyleSheet, Text, View, SafeAreaView, ScrollView, TouchableOpacity, Image, Alert } from 'react-native';
 import { Clock, MapPin, Package, CircleCheck as CheckCircle, CircleAlert as AlertCircle, Phone, MessageSquare } from 'lucide-react-native';
 import { Linking } from 'react-native';
 import { router } from 'expo-router';
 import Colors from '@/constants/Colors';
-import { SPACING, FONT, FONT_SIZE, BORDER_RADIUS, SHADOWS } from '@/constantas/Theme';
+import { SPACING, FONT, FONT_SIZE, BORDER_RADIUS, SHADOWS } from '@/constants/Theme';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { useDelivery } from '@/contexts/DeliveryContext';
@@ -22,7 +23,10 @@ export default function CourierDeliveriesScreen() {
     currentDelivery, 
     setCurrentDelivery,
     updateDeliveryTracker,
-    completeDelivery 
+    completeDelivery,
+    loading,
+    error,
+    refreshDeliveries
   } = useDelivery();
 
   const { 
@@ -31,6 +35,11 @@ export default function CourierDeliveriesScreen() {
     markAsRead,
     refreshNotifications 
   } = useNotificationsByType('delivery');
+
+  useEffect(() => {
+    refreshDeliveries();
+    refreshNotifications();
+  }, []);
 
   const handleDeliveryPress = (delivery: any) => {
     const deliveryId = delivery.id;
@@ -61,7 +70,7 @@ export default function CourierDeliveriesScreen() {
   };
   
   const handleCallClient = (delivery: any) => {
-    const phoneNumber = delivery.ClientDetails?.phone || '+254712345678';
+    const phoneNumber = delivery.ClientDetails?.smePhone || '+254712345678';
     Linking.openURL(`tel:${phoneNumber}`);
   };
   
@@ -72,7 +81,7 @@ export default function CourierDeliveriesScreen() {
       params: {
         openChatWithUser: delivery.ClientDetails?.smeId || delivery.id,
         userName: delivery.ClientDetails?.smeName || delivery.clientName,
-        userPhone: delivery.ClientDetails?.phone || '+254712345678',
+        userPhone: delivery.ClientDetails?.smePhone || '+254712345678',
         userAvatar: 'https://i.ibb.co/M8JnWhy/avatar.png',
         deliveryId: delivery.id,
       }
@@ -151,6 +160,18 @@ export default function CourierDeliveriesScreen() {
       </View>
       
       <ScrollView contentContainerStyle={styles.deliveriesList}>
+        {loading && (
+          <View style={styles.loadingContainer}>
+            <Text style={styles.loadingText}>Loading deliveries...</Text>
+          </View>
+        )}
+        
+        {error && (
+          <View style={styles.errorContainer}>
+            <Text style={styles.errorText}>{error}</Text>
+          </View>
+        )}
+        
         {activeTab === 'ongoing' && pendingOngoingDeliveries.length > 0 ? (
           pendingOngoingDeliveries.map((delivery) => {
             const isCurrentDelivery = currentDelivery?.id === delivery.id;
@@ -509,5 +530,28 @@ const styles = StyleSheet.create({
     color: Colors.light.placeholder,
     textAlign: 'center',
     paddingHorizontal: SPACING.lg,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: SPACING.xxl,
+  },
+  loadingText: {
+    fontFamily: FONT.regular,
+    fontSize: FONT_SIZE.md,
+    color: Colors.light.placeholder,
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: SPACING.xxl,
+  },
+  errorText: {
+    fontFamily: FONT.regular,
+    fontSize: FONT_SIZE.md,
+    color: Colors.light.error,
+    textAlign: 'center',
   },
 });

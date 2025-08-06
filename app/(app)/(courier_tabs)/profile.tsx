@@ -1,18 +1,44 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { StyleSheet, Text, View, SafeAreaView, Image, TouchableOpacity, ScrollView, Switch } from 'react-native';
 import { ChevronRight, Bell, CircleHelp as HelpCircle, LogOut, Settings, Truck, FileText } from 'lucide-react-native';
 import { router } from 'expo-router';
 import Colors from '@/constants/Colors';
 import { SPACING, FONT, FONT_SIZE, BORDER_RADIUS, SHADOWS } from '@/constants/Theme';
+import { useUser } from '@/contexts/UserContext';
 
 export default function CourierProfileScreen() {
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [darkModeEnabled, setDarkModeEnabled] = useState(false);
   
+  const { user, loading, error, refreshProfile } = useUser();
+  
+  useEffect(() => {
+    refreshProfile();
+  }, []);
+  
   const handleLogout = () => {
     router.replace('/(auth)');
   };
 
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <Text style={styles.loadingText}>Loading profile...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (error) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>{error}</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
@@ -23,12 +49,14 @@ export default function CourierProfileScreen() {
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.profileCard}>
           <Image
-            source={{ uri: 'https://i.ibb.co/M8JnWhy/avatar.png' }}
+            source={{ uri: user?.avatar || 'https://i.ibb.co/M8JnWhy/avatar.png' }}
             style={styles.profileImage}
           />
           <View style={styles.profileInfo}>
-            <Text style={styles.profileName}>Martin Lawrence</Text>
-            <Text style={styles.profileEmail}>martin.lawrence@example.com</Text>
+            <Text style={styles.profileName}>
+              {user ? `${user.firstName} ${user.lastName}` : 'Loading...'}
+            </Text>
+            <Text style={styles.profileEmail}>{user?.email || 'Loading...'}</Text>
             <Text style={styles.profileType}>Courier Account</Text>
           </View>
           <TouchableOpacity style={styles.editButton}>
@@ -220,5 +248,26 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZE.md,
     color: Colors.light.error,
     marginLeft: SPACING.sm,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    fontFamily: FONT.regular,
+    fontSize: FONT_SIZE.md,
+    color: Colors.light.placeholder,
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  errorText: {
+    fontFamily: FONT.regular,
+    fontSize: FONT_SIZE.md,
+    color: Colors.light.error,
+    textAlign: 'center',
   },
 });
