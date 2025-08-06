@@ -154,33 +154,6 @@ export const getSMEDeliveries = () => {
       ],
     };
   }
-                pickupLocation: '123 Warehouse Ave, District A',
-                dropoffLocation: '456 Industrial Blvd, District B',
-                vehicleType: 'truck',
-                packageDescription: 'Industrial machinery parts',
-                packageQualities: ['cold chain', 'perishables', 'standard'],
-                optionalInstructions: 'Requires forklift for loading/unloading',
-                insurance: 5,
-                fee: 15.50,
-                courierId: 'COURIER_12345',
-                status: 'ongoing',
-                dateCreated: '2024-01-20T10:30:00Z',
-                rating: 4.5,
-                trackerDetails: {
-                  confirmPickup: '2024-01-21T10:30:00Z',
-                  imageAtPickup: 'https://dummyimage.com/pickup_del87dd5.jpg',
-                  actualPickupLocation: { 
-                    lat: 37.7749, 
-                    lng: -122.4194 
-                  }, // real-time GPS of pickup not exact to th stated delivery location 
-                  confirmDelivery: '',
-                  imageAtDelivery: '',
-                 
-                },
-          
-          }
-    ],
-  };
 };
 
 
