@@ -473,17 +473,13 @@ export default function CourierMapScreen() {
     }
   };
 
-  const deliveryInfoHeader = () => {
-    return (
-      <View style={styles.deliveryInfoHeader}>
-        <Text style={styles.sectionTitle}>Delivery Progress</Text>
-        <Badge 
-          label={getDeliveryStatus()} 
-          variant={getStatusBadgeVariant() as any}
-          size="small"
-        />
-      </View>
-    );
+  const header = {
+    headerTitle: 'Delivery Map',
+    headerSubtitle: 'No active delivery'
+  };
+
+  const deliveryInfoHeader = {
+    sectionTitle: 'Delivery Progress'
   };
 
   if (!currentDelivery) {
@@ -491,8 +487,8 @@ export default function CourierMapScreen() {
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
           <View>
-            <Text style={styles.headerTitle}>Delivery Map</Text>
-            <Text style={styles.headerSubtitle}>No active delivery</Text>
+            <Text style={styles.headerTitle}>{header.headerTitle}</Text>
+            <Text style={styles.headerSubtitle}>{header.headerSubtitle}</Text>
           </View>
           <NotificationBell 
             hasUnread={mapUnreadCount > 0}
@@ -635,7 +631,14 @@ export default function CourierMapScreen() {
             ]}
           >
             {/* Delivery Info Header */}
-            {deliveryInfoHeader()}
+            <View style={styles.deliveryInfoHeader}>
+              <Text style={styles.sectionTitle}>{deliveryInfoHeader.sectionTitle}</Text>
+              <Badge 
+                label={getDeliveryStatus()} 
+                variant={getStatusBadgeVariant() as any}
+                size="small"
+              />
+            </View>
 
             {/* Location Display */}
             <View style={styles.locationDisplayContainer}>
