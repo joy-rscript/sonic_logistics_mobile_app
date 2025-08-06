@@ -1,18 +1,67 @@
 import { useState } from 'react';
+import { useEffect } from 'react';
 import { StyleSheet, Text, View, SafeAreaView, Image, TouchableOpacity, ScrollView, Switch } from 'react-native';
 import { ChevronRight, Bell, CircleHelp as HelpCircle, LogOut, Settings, Building, FileText } from 'lucide-react-native';
 import { router } from 'expo-router';
 import Colors from '@/constants/Colors';
 import { SPACING, FONT, FONT_SIZE, BORDER_RADIUS, SHADOWS } from '@/constants/Theme';
+import { getSMEProfile } from '@/utils/smeApi';
+import { useUser } from '@/contexts/UserContext';
 
 export default function SMEProfileScreen() {
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [darkModeEnabled, setDarkModeEnabled] = useState(false);
+  const [smeProfile, setSmeProfile] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  
+  const { user, refreshProfile } = useUser();
+  
+  // Load SME profile data
+  useEffect(() => {
+    const loadProfile = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const [smeResponse] = await Promise.all([
+          getSMEProfile(),
+          refreshProfile()
+        ]);
+        setSmeProfile(smeResponse.data);
+      } catch (err) {
+        setError('Failed to load profile');
+        console.error('Error loading SME profile:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadProfile();
+  }, []);
   
   const handleLogout = () => {
     router.replace('/(auth)');
   };
 
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <Text style={styles.loadingText}>Loading profile...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (error) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>{error}</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
@@ -23,12 +72,16 @@ export default function SMEProfileScreen() {
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.profileCard}>
           <Image
-            source={{ uri: 'https://i.ibb.co/M8JnWhy/avatar.png' }}
+            source={{ uri: user?.avatar || 'https://i.ibb.co/M8JnWhy/avatar.png' }}
             style={styles.profileImage}
           />
           <View style={styles.profileInfo}>
-            <Text style={styles.profileName}>TechCorp Solutions</Text>
-            <Text style={styles.profileEmail}>admin@techcorp.co.ke</Text>
+            <Text style={styles.profileName}>
+              {smeProfile?.business_name || 'Loading...'}
+            </Text>
+            <Text style={styles.profileEmail}>
+              {smeProfile?.email || user?.email || 'Loading...'}
+            </Text>
             <Text style={styles.profileType}>SME Account</Text>
           </View>
           <TouchableOpacity style={styles.editButton}>
@@ -220,5 +273,26 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZE.md,
     color: Colors.light.error,
     marginLeft: SPACING.sm,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    fontFamily: FONT.regular,
+    fontSize: FONT_SIZE.md,
+    color: Colors.light.placeholder,
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  errorText: {
+    fontFamily: FONT.regular,
+    fontSize: FONT_SIZE.md,
+    color: Colors.light.error,
+    textAlign: 'center',
   },
 });

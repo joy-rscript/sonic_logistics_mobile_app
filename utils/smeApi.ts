@@ -1,5 +1,54 @@
 import apiClient from './apiClient';
 
+// ============ SME Profile Management ============
+
+export const getSMEProfile = async () => {
+  try {
+    const response = await apiClient.get('/profile/sme');
+    return response;
+  } catch (error) {
+    console.warn('SME profile API unavailable, using mock data:', error);
+    return {
+      data: {
+        id: 'sme_003',
+        first_name: 'John',
+        last_name: 'Doe',
+        email: 'john.doe@example.com',
+        phone: '+254712345678',
+        business_name: 'TechCorp Solutions',
+        business_address: '123 Commerce Street, Industrial Zone, Nairobi',
+        business_phone: '+254712345678',
+        business_website: 'https://techcorp.co.ke',
+        business_industry: 'Technology',
+        tax_id: 'TAX-987654321',
+      },
+    };
+  }
+};
+
+export const updateSMEProfile = async (data: {
+  business_name?: string;
+  business_address?: string;
+  business_phone?: string; 
+  business_website?: string;
+  business_industry?: string;
+  tax_id?: string;
+}) => {
+  try {
+    const response = await apiClient.put('/profile/sme', data);
+    return response;
+  } catch (error) {
+    console.warn('SME profile update API unavailable, using mock data:', error);
+    return {
+      data: {
+        success: true,
+        message: 'Profile updated successfully!',
+        status: 'OK',
+      },
+    };
+  }
+};
+
 // ============ SME Delivery Actions ============
 
 export const createDelivery = (data: {
@@ -66,9 +115,13 @@ export const calculateFare = (data: {
 };
 
 export const getSMEDeliveries = () => {
-  apiClient.get('/deliveries/ongoing');
-  return {
-    data: [
+  try {
+    const response = apiClient.get('/deliveries/ongoing');
+    return response;
+  } catch (error) {
+    console.warn('SME deliveries API unavailable, using mock data:', error);
+    return {
+      data: [
                 { 
                   id: 'del87dd5', 
                   pickupLocation: '123 Warehouse Ave, District A',
@@ -98,8 +151,9 @@ export const getSMEDeliveries = () => {
                
             
             },
-            { 
-                id: 'del87dd5', 
+      ],
+    };
+  }
                 pickupLocation: '123 Warehouse Ave, District A',
                 dropoffLocation: '456 Industrial Blvd, District B',
                 vehicleType: 'truck',
@@ -131,9 +185,13 @@ export const getSMEDeliveries = () => {
 
 
 export const getSMEHistory = () => {
-  apiClient.get('/deliveries/history');
-  return {
-    data: [
+  try {
+    const response = apiClient.get('/deliveries/history');
+    return response;
+  } catch (error) {
+    console.warn('SME history API unavailable, using mock data:', error);
+    return {
+      data: [
         { 
             id: 'del8567dd5', 
             pickupLocation: '123 Warehouse Ave, District A',
@@ -192,47 +250,49 @@ export const getSMEHistory = () => {
               }, 
             },
           },
-    ],
-  };
+      ],
+    };
+  }
 };
 
-// Get the current SME profile
-export const getSMEProfile = () => {
-    apiClient.get('/profile/sme');
+
+// ============ SME Notifications ============
+
+export const getSMENotifications = async () => {
+  try {
+    const response = await apiClient.get('/notifications/sme');
+    return response;
+  } catch (error) {
+    console.warn('SME notifications API unavailable, using mock data:', error);
     return {
-        data: {
-        first_name: 'John',
-        last_name: 'Doe',
-        email: 'john.doe@example.com',
-        phone: '+1234567890',
-        business_name: 'Logistics Pro Inc.',
-        business_address: '123 Commerce Street, Industrial Zone, City A',
-        business_phone: '+1234567890',
-        business_website: 'https://logisticspro.example.com',
-        business_industry: 'Transportation and Logistics',
-        tax_id: 'TAX-987654321',
+      data: [
+        {
+          id: '1',
+          title: 'Delivery Accepted',
+          message: 'Your delivery request has been accepted by Martin Lawrence.',
+          type: 'delivery',
+          read: false,
+          createdAt: new Date(Date.now() - 1 * 60 * 60 * 1000),
+          deliveryId: 'sme1',
         },
-      };
-  };
-  
-  // Update SME profile
-  export const updateSMEProfile = (data: {
-    business_name?: string;
-    business_address?: string;
-    business_phone?: string; 
-    business_website?: string;
-    business_industry?: string;
-    tax_id?: string;
-  }) => {
-    apiClient.put('/profile/sme', data);
-    return {
-        data: {
-            success: true,
-            message: 'profile updated successfully!',
-            status: 'OK',
-          },
-    }
-  };
-  
- 
-  
+        {
+          id: '2',
+          title: 'Payment Processed',
+          message: 'Your payment for delivery #SME1 has been processed successfully.',
+          type: 'update',
+          read: false,
+          createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000),
+        },
+        {
+          id: '3',
+          title: 'Delivery Completed',
+          message: 'Your package has been successfully delivered to Karen Shopping Centre.',
+          type: 'delivery',
+          read: true,
+          createdAt: new Date(Date.now() - 24 * 60 * 60 * 1000),
+          deliveryId: 'sme2',
+        },
+      ],
+    };
+  }
+};

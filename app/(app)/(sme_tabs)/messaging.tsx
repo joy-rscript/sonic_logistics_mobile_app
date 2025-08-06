@@ -1,13 +1,20 @@
 import { useState } from 'react';
+import { useEffect } from 'react';
 import { StyleSheet, Text, View, SafeAreaView, FlatList, TouchableOpacity, TextInput, Image } from 'react-native';
 import { Search } from 'lucide-react-native';
 import Colors from '@/constants/Colors';
 import { SPACING, FONT, FONT_SIZE, BORDER_RADIUS } from '@/constants/Theme';
-import { mockChats } from '@/data/mockData';
+import { useChat } from '@/contexts/ChatContext';
 
 export default function SMEMessagingScreen() {
   const [searchQuery, setSearchQuery] = useState('');
-  const [chats, setChats] = useState(mockChats);
+  
+  const { chats, loading, error, refreshChats } = useChat();
+  
+  // Load chats when component mounts
+  useEffect(() => {
+    refreshChats();
+  }, []);
   
   const renderChatItem = ({ item }: { item: typeof mockChats[0] }) => (
     <TouchableOpacity style={styles.chatItem}>
@@ -55,6 +62,15 @@ export default function SMEMessagingScreen() {
         </View>
       </View>
       
+      {loading ? (
+        <View style={styles.loadingContainer}>
+          <Text style={styles.loadingText}>Loading conversations...</Text>
+        </View>
+      ) : error ? (
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>{error}</Text>
+        </View>
+      ) : chats.length > 0 ? (
       <FlatList
         data={chats}
         renderItem={renderChatItem}
@@ -62,6 +78,14 @@ export default function SMEMessagingScreen() {
         contentContainerStyle={styles.chatsList}
         showsVerticalScrollIndicator={false}
       />
+      ) : (
+        <View style={styles.emptyState}>
+          <Text style={styles.emptyStateTitle}>No Conversations</Text>
+          <Text style={styles.emptyStateText}>
+            Start chatting with couriers when they accept your deliveries
+          </Text>
+        </View>
+      )}
     </SafeAreaView>
   );
 }
@@ -187,5 +211,47 @@ const styles = StyleSheet.create({
     fontFamily: FONT.medium,
     fontSize: FONT_SIZE.xs,
     color: Colors.light.background,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: SPACING.xxl,
+  },
+  loadingText: {
+    fontFamily: FONT.regular,
+    fontSize: FONT_SIZE.md,
+    color: Colors.light.placeholder,
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: SPACING.xxl,
+  },
+  errorText: {
+    fontFamily: FONT.regular,
+    fontSize: FONT_SIZE.md,
+    color: Colors.light.error,
+    textAlign: 'center',
+  },
+  emptyState: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: SPACING.xxl,
+  },
+  emptyStateTitle: {
+    fontFamily: FONT.poppinsBold,
+    fontSize: FONT_SIZE.lg,
+    color: Colors.light.text,
+    marginBottom: SPACING.xs,
+  },
+  emptyStateText: {
+    fontFamily: FONT.regular,
+    fontSize: FONT_SIZE.md,
+    color: Colors.light.placeholder,
+    textAlign: 'center',
+    paddingHorizontal: SPACING.lg,
   },
 });

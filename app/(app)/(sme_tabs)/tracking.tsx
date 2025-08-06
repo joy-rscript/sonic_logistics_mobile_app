@@ -10,7 +10,8 @@ import Colors from '@/constants/Colors';
 import { SPACING, FONT, FONT_SIZE, BORDER_RADIUS, SHADOWS } from '@/constants/Theme';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
-import { useDelivery } from '../../../contexts/DeliveryContext';
+import { useDelivery } from '@/contexts/DeliveryContext';
+import { getSMEDeliveries } from '@/utils/smeApi';
 
 const { height: screenHeight } = Dimensions.get('window');
 
@@ -21,9 +22,38 @@ const SNAP_POINTS = {
 
 export default function TrackingScreen() {
   const { deliveryId } = useLocalSearchParams();
-  const { getDeliveryById, updateDriverLocation } = useDelivery() || {};
-  const [delivery, setDelivery] = useState(getDeliveryById(deliveryId as string));
+  const { updateDriverLocation } = useDelivery() || {};
+  const [delivery, setDelivery] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [bottomSheetHeight, setBottomSheetHeight] = useState(SNAP_POINTS.COLLAPSED);
+
+  // Load delivery data
+  useEffect(() => {
+    const loadDelivery = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const response = await getSMEDeliveries();
+        const foundDelivery = response.data.find((d: any) => d.id === deliveryId);
+        
+        if (foundDelivery) {
+          setDelivery(foundDelivery);
+        } else {
+          setError('Delivery not found');
+        }
+      } catch (err) {
+        setError('Failed to load delivery');
+        console.error('Error loading delivery:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (deliveryId) {
+      loadDelivery();
+    }
+  }, [deliveryId]);
 
   // Bottom sheet animation
   const bottomSheetAnim = useRef(new Animated.Value(SNAP_POINTS.COLLAPSED)).current;
@@ -31,7 +61,7 @@ export default function TrackingScreen() {
 
   // Simulate real-time driver location updates
   useEffect(() => {
-    if (!delivery || !delivery.CourierDetails?.CourierCoordinates) return;
+    if (!delivery || !delivery.CourierDetails?.CourierCoordinates || !updateDriverLocation) return;
 
     const interval = setInterval(() => {
       const currentLocation = delivery.CourierDetails!.CourierCoordinates!;
@@ -48,7 +78,14 @@ export default function TrackingScreen() {
       };
 
       updateDriverLocation(delivery.id, newLocation);
-      setDelivery(getDeliveryById(delivery.id));
+      // Update local delivery state
+      setDelivery((prev: any) => ({
+        ...prev,
+        CourierDetails: {
+          ...prev.CourierDetails,
+          CourierCoordinates: newLocation
+        }
+      }));
     }, 5000); // Update every 5 seconds
 
     return () => clearInterval(interval);
@@ -102,14 +139,24 @@ export default function TrackingScreen() {
     },
   });
 
-  if (!delivery) {
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <Text style={styles.loadingText}>Loading delivery...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (error || !delivery) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
             <ArrowLeft size={24} color={Colors.light.text} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Delivery Not Found</Text>
+          <Text style={styles.headerTitle}>{error || 'Delivery Not Found'}</Text>
         </View>
       </SafeAreaView>
     );
@@ -494,5 +541,15 @@ const styles = StyleSheet.create({
     fontSize: FONT_SIZE.sm,
     color: Colors.light.placeholder,
     marginLeft: SPACING.xs,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    fontFamily: FONT.regular,
+    fontSize: FONT_SIZE.md,
+    color: Colors.light.placeholder,
   },
 });

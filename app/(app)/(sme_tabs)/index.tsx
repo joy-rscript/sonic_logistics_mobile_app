@@ -15,6 +15,7 @@ import { useDelivery } from '@/contexts/DeliveryContext';
 import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { PaymentModal } from '@/components/ui/PaymentModal';
 import FlashMessage, { showMessage } from 'react-native-flash-message';
+import { getSMEProfile } from '@/utils/smeApi';
 
 const { height: screenHeight, width: screenWidth } = Dimensions.get('window');
 
@@ -60,6 +61,10 @@ export default function SMEHomeScreen() {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [createdDeliveryData, setCreatedDeliveryData] = useState<any>(null);
 
+  // SME profile data
+  const [smeProfile, setSmeProfile] = useState<any>(null);
+  const [profileLoading, setProfileLoading] = useState(true);
+
   // Form field state
   const [formData, setFormData] = useState<DeliveryForm>({
     pickupLocation: '', 
@@ -77,6 +82,23 @@ export default function SMEHomeScreen() {
 
   const scrollViewRef = useRef<ScrollView>(null);
   const { createNewDelivery } = useDelivery();
+
+  // Load SME profile data
+  useEffect(() => {
+    const loadSMEProfile = async () => {
+      setProfileLoading(true);
+      try {
+        const response = await getSMEProfile();
+        setSmeProfile(response.data);
+      } catch (error) {
+        console.error('Error loading SME profile:', error);
+      } finally {
+        setProfileLoading(false);
+      }
+    };
+
+    loadSMEProfile();
+  }, []);
 
   // Auto-snap based on current step with enhanced logic
   useEffect(() => {
@@ -252,12 +274,20 @@ export default function SMEHomeScreen() {
 
   const handleProceedToPayment = async () => {
     try {
+      if (!smeProfile) {
+        Alert.alert('Error', 'Profile data not loaded. Please try again.');
+        return;
+      }
+
       // Create delivery request
       const deliveryData = {
         ClientDetails: {
-          smeName: 'TechCorp Solutions', // This should come from user context
-          businessIndustry: 'Technology',
-          smeId: 'sme_003', // This should come from user context
+          smeName: smeProfile.business_name,
+          businessIndustry: smeProfile.business_industry,
+          smeId: smeProfile.id || 'sme_003',
+          smePhone: smeProfile.phone,
+          recepientPhone: '+254712345679', // This would come from delivery form in real app
+          recepientName: 'Recipient', // This would come from delivery form in real app
         },
         PackageDetails: {
           ...formData,

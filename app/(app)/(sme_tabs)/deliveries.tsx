@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useEffect } from 'react';
 import { StyleSheet, Text, View, SafeAreaView, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import { Search, Filter, MapPin, User, Clock, CreditCard } from 'lucide-react-native';
 import { router } from 'expo-router';
@@ -9,12 +10,40 @@ import { Badge } from '@/components/ui/Badge';
 import { useDelivery } from '@/contexts/DeliveryContext';
 import { PaymentModal } from '@/components/ui/PaymentModal';
 import FlashMessage, { showMessage } from 'react-native-flash-message';
+import { getSMEDeliveries, getSMEHistory } from '@/utils/smeApi';
 
 export default function SMEDeliveriesScreen() {
   const [activeTab, setActiveTab] = useState<'all' | 'pending' | 'accepted' | 'completed'>('all');
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [selectedDeliveryForPayment, setSelectedDeliveryForPayment] = useState<any>(null);
-  const { smeDeliveries } = useDelivery();
+  const [deliveries, setDeliveries] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Load SME deliveries
+  useEffect(() => {
+    const loadDeliveries = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const [ongoingResponse, historyResponse] = await Promise.all([
+          getSMEDeliveries(),
+          getSMEHistory()
+        ]);
+        
+        // Combine ongoing and history deliveries
+        const allDeliveries = [...ongoingResponse.data, ...historyResponse.data];
+        setDeliveries(allDeliveries);
+      } catch (err) {
+        setError('Failed to load deliveries');
+        console.error('Error loading SME deliveries:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadDeliveries();
+  }, []);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -37,8 +66,8 @@ export default function SMEDeliveriesScreen() {
   };
 
   const filteredDeliveries = activeTab === 'all' 
-    ? smeDeliveries 
-    : smeDeliveries.filter(s => s.status === activeTab);
+    ? deliveries 
+    : deliveries.filter(s => s.status === activeTab);
 
   const handleDeliveryPress = (delivery: any) => {
     if (delivery.status === 'accepted' && delivery.CourierDetails?.CourierId) {
@@ -113,6 +142,15 @@ export default function SMEDeliveriesScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.DeliveriesList}>
+        {loading ? (
+          <View style={styles.loadingContainer}>
+            <Text style={styles.loadingText}>Loading deliveries...</Text>
+          </View>
+        ) : error ? (
+          <View style={styles.errorContainer}>
+            <Text style={styles.errorText}>{error}</Text>
+          </View>
+        ) : (
         {filteredDeliveries.map((shipment) => (
           <TouchableOpacity 
             key={shipment.id} 
@@ -195,6 +233,7 @@ export default function SMEDeliveriesScreen() {
             </Card>
           </TouchableOpacity>
         ))}
+        )}
 
         {filteredDeliveries.length === 0 && (
           <View style={styles.emptyState}>
@@ -412,6 +451,29 @@ const styles = StyleSheet.create({
     fontFamily: FONT.bold,
     fontSize: FONT_SIZE.md,
     color: Colors.light.primary,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: SPACING.xxl,
+  },
+  loadingText: {
+    fontFamily: FONT.regular,
+    fontSize: FONT_SIZE.md,
+    color: Colors.light.placeholder,
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: SPACING.xxl,
+  },
+  errorText: {
+    fontFamily: FONT.regular,
+    fontSize: FONT_SIZE.md,
+    color: Colors.light.error,
+    textAlign: 'center',
   },
   emptyState: {
     alignItems: 'center',
