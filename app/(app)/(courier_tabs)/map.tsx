@@ -473,6 +473,19 @@ export default function CourierMapScreen() {
     }
   };
 
+  const deliveryInfoHeader = () => {
+    return (
+      <View style={styles.deliveryInfoHeader}>
+        <Text style={styles.sectionTitle}>Delivery Progress</Text>
+        <Badge 
+          label={getDeliveryStatus()} 
+          variant={getStatusBadgeVariant() as any}
+          size="small"
+        />
+      </View>
+    );
+  };
+
   if (!currentDelivery) {
     return (
       <SafeAreaView style={styles.container}>
@@ -622,14 +635,7 @@ export default function CourierMapScreen() {
             ]}
           >
             {/* Delivery Info Header */}
-            <View style={styles.deliveryInfoHeader}>
-              <Text style={styles.sectionTitle}>Delivery Progress</Text>
-              <Badge 
-                label={getDeliveryStatus()} 
-                variant={getStatusBadgeVariant() as any}
-                size="small"
-              />
-            </View>
+            {deliveryInfoHeader()}
 
             {/* Location Display */}
             <View style={styles.locationDisplayContainer}>
@@ -767,6 +773,26 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.light.background,
   },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md,
+    backgroundColor: Colors.light.background,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.light.border,
+  },
+  headerTitle: {
+    fontFamily: FONT.poppinsBold,
+    fontSize: FONT_SIZE.lg,
+    color: Colors.light.text,
+  },
+  headerSubtitle: {
+    fontFamily: FONT.regular,
+    fontSize: FONT_SIZE.sm,
+    color: Colors.light.placeholder,
+  },
   mapContainer: {
     flex: 1,
     position: 'relative',
@@ -781,39 +807,6 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: screenHeight * 0.25, // Above the collapsed stepper
     zIndex: 0,
-  },
-              onStepComplete={handleStepComplete}
-              currentStep={currentStep}
-              isCompleted={isDeliveryCompleted}
-              deliveryId={currentDelivery?.id}
-              deliveryData={currentDelivery}
-            />
-          </ScrollView>
-        </Animated.View>
-      </KeyboardAvoidingView>
-
-      <NotificationPanel
-        visible={showNotificationPanel}
-        onClose={() => setShowNotificationPanel(false)}
-        notifications={mapNotifications}
-        onNotificationRead={markAsRead}
-        title="Map Notifications"
-      />
-    </SafeAreaView>
-  );
-}
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.light.background,
-  },
-  mapContainer: {
-    flex: 1,
-    position: 'relative',
-  },
-  map: {
-    ...StyleSheet.absoluteFillObject,
   },
   mapHeader: {
     position: 'absolute',
@@ -915,6 +908,17 @@ const styles = StyleSheet.create({
   bottomSheetContentContainer: {
     paddingHorizontal: SPACING.lg,
     paddingBottom: SPACING.xxl,
+  },
+  deliveryInfoHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: SPACING.md,
+  },
+  sectionTitle: {
+    fontFamily: FONT.poppinsBold,
+    fontSize: FONT_SIZE.md,
+    color: Colors.light.text,
   },
   clientInfoCard: {
     marginBottom: SPACING.lg,
